@@ -169,7 +169,7 @@ const Dashboard = {
 
                     <button
                         id="btnAbsenMasuk"
-                        class="btn-primary"
+                        class="btn-attendance"
                         type="button"
                     >
                         Absen Masuk
@@ -178,7 +178,7 @@ const Dashboard = {
 
                     <button
                         id="btnAbsenPulang"
-                        class="btn-primary"
+                        class="btn-attendance"
                         type="button"
                     >
                         Absen Pulang
@@ -300,60 +300,104 @@ const Dashboard = {
 
         }
 
+const btnBukaKamera =
+    document.getElementById(
+        "btnBukaKamera"
+    );
 
-        const btnBukaKamera =
-            document.getElementById(
-                "btnBukaKamera"
-            );
 
-        if (btnBukaKamera) {
+if (btnBukaKamera) {
 
-            btnBukaKamera.addEventListener(
-                "click",
-                async () => {
+    btnBukaKamera.addEventListener(
+        "click",
+        async () => {
 
-                    btnBukaKamera.disabled = true;
+            const scanResult =
+                document.getElementById(
+                    "scanResult"
+                );
 
-                    try {
 
-                        const scanResult =
-                            document.getElementById(
-                                "scanResult"
-                            );
+            btnBukaKamera.disabled =
+                true;
 
-                        if (scanResult) {
 
-                            scanResult.textContent =
-                                "Membuka kamera...";
+            btnBukaKamera.textContent =
+                "Membuka Kamera...";
 
-                        }
 
-                        await this.startScanner(user);
+            if (scanResult) {
 
-                        if (scanResult) {
+                scanResult.textContent =
+                    "Meminta izin kamera...";
 
-                            scanResult.textContent =
-                                "Kamera aktif. Arahkan ke QR Code absensi.";
+                scanResult.classList.remove(
+                    "error",
+                    "success"
+                );
 
-                        }
+            }
 
-                    } catch (error) {
 
-                        console.error(
-                            "BUTTON CAMERA ERROR:",
-                            error
-                        );
+            try {
 
-                    } finally {
+                await this.startScanner(
+                    user
+                );
 
-                        btnBukaKamera.disabled = false;
 
-                    }
+                if (scanResult) {
+
+                    scanResult.textContent =
+                        "✅ Kamera aktif. Arahkan kamera ke QR Code Admin.";
+
+                    scanResult.classList.add(
+                        "success"
+                    );
 
                 }
-            );
+
+
+                btnBukaKamera.textContent =
+                    "Kamera Aktif";
+
+
+            } catch (error) {
+
+                console.error(
+                    "BUTTON CAMERA ERROR:",
+                    error
+                );
+
+
+                if (scanResult) {
+
+                    scanResult.textContent =
+                        "❌ " +
+                        (
+                            error.message ||
+                            "Kamera tidak dapat dibuka."
+                        );
+
+                    scanResult.classList.add(
+                        "error"
+                    );
+
+                }
+
+
+                btnBukaKamera.disabled =
+                    false;
+
+                btnBukaKamera.textContent =
+                    "Buka Kamera";
+
+            }
 
         }
+    );
+
+}
 
 
         // =====================================
@@ -362,12 +406,6 @@ const Dashboard = {
 
         await this.loadHistory(user);
 
-
-        // =====================================
-        // START QR SCANNER
-        // =====================================
-
-        await this.startScanner(user);
 
     },
 

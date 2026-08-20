@@ -26,6 +26,70 @@
         href="css/style.css"
     >
 
+
+    <!-- =====================================
+         PWA - WEB APP MANIFEST
+    ====================================== -->
+
+    <link
+        rel="manifest"
+        href="manifest.json"
+    >
+
+
+    <!-- =====================================
+         PWA - ANDROID / CHROME
+    ====================================== -->
+
+    <meta
+        name="mobile-web-app-capable"
+        content="yes"
+    >
+
+
+    <!-- =====================================
+         PWA - iOS / SAFARI
+    ====================================== -->
+
+    <meta
+        name="apple-mobile-web-app-capable"
+        content="yes"
+    >
+
+    <meta
+        name="apple-mobile-web-app-status-bar-style"
+        content="black-translucent"
+    >
+
+    <meta
+        name="apple-mobile-web-app-title"
+        content="Absensi KAI"
+    >
+
+    <link
+        rel="apple-touch-icon"
+        href="assets/icons/apple-touch-icon.png"
+    >
+
+
+    <!-- =====================================
+         FAVICON
+    ====================================== -->
+
+    <link
+        rel="icon"
+        type="image/png"
+        sizes="32x32"
+        href="assets/icons/favicon-32.png"
+    >
+
+    <link
+        rel="icon"
+        type="image/png"
+        sizes="16x16"
+        href="assets/icons/favicon-16.png"
+    >
+
 </head>
 
 
@@ -58,10 +122,6 @@
                 <h1>
                     Absensi Magang
                 </h1>
-
-
-            <div id="reader"></div>
-
 
 
                 <p class="subtitle">
@@ -374,13 +434,13 @@
         src="js/auth.js"
     ></script>
 
-    <script
-        src="assets/lib/qrcode.min.js"
-    ></script>
+   <script
+    src="assets/qrcode.min.js"
+></script>
 
-    <script
-        src="assets/lib/html5-qrcode.min.js"
-    ></script>
+<script
+    src="assets/html5-qrcode.min.js"
+></script>
 
     <script
         src="js/dashboard.js"
@@ -393,6 +453,45 @@
     <script
         src="js/app.js"
     ></script>
+
+
+    <!-- =====================================
+         PWA - REGISTER SERVICE WORKER
+    ====================================== -->
+
+    <script>
+
+        if ("serviceWorker" in navigator) {
+
+            window.addEventListener("load", () => {
+
+                // "./service-worker.js" (relatif) supaya
+                // tetap benar walau di-host di subfolder
+                // GitHub Pages (mis. username.github.io/repo/)
+                navigator.serviceWorker
+                    .register("./service-worker.js")
+                    .then((reg) => {
+
+                        console.log(
+                            "[PWA] Service worker terdaftar:",
+                            reg.scope
+                        );
+
+                    })
+                    .catch((error) => {
+
+                        console.error(
+                            "[PWA] Gagal mendaftarkan service worker:",
+                            error
+                        );
+
+                    });
+
+            });
+
+        }
+
+    </script>
 
 </body>
 
