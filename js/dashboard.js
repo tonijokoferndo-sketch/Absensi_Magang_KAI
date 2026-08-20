@@ -110,6 +110,23 @@ const Dashboard = {
                 </p>
 
 
+                <div
+                    style="
+                        display:flex;
+                        justify-content:center;
+                        margin:12px 0;
+                    "
+                >
+                    <button
+                        id="btnBukaKamera"
+                        class="btn-secondary"
+                        type="button"
+                    >
+                        Buka Kamera
+                    </button>
+                </div>
+
+
                 <!-- QR READER -->
 
                 <div
@@ -161,7 +178,7 @@ const Dashboard = {
 
                     <button
                         id="btnAbsenPulang"
-                        class="btn-success"
+                        class="btn-primary"
                         type="button"
                     >
                         Absen Pulang
@@ -284,6 +301,61 @@ const Dashboard = {
         }
 
 
+        const btnBukaKamera =
+            document.getElementById(
+                "btnBukaKamera"
+            );
+
+        if (btnBukaKamera) {
+
+            btnBukaKamera.addEventListener(
+                "click",
+                async () => {
+
+                    btnBukaKamera.disabled = true;
+
+                    try {
+
+                        const scanResult =
+                            document.getElementById(
+                                "scanResult"
+                            );
+
+                        if (scanResult) {
+
+                            scanResult.textContent =
+                                "Membuka kamera...";
+
+                        }
+
+                        await this.startScanner(user);
+
+                        if (scanResult) {
+
+                            scanResult.textContent =
+                                "Kamera aktif. Arahkan ke QR Code absensi.";
+
+                        }
+
+                    } catch (error) {
+
+                        console.error(
+                            "BUTTON CAMERA ERROR:",
+                            error
+                        );
+
+                    } finally {
+
+                        btnBukaKamera.disabled = false;
+
+                    }
+
+                }
+            );
+
+        }
+
+
         // =====================================
         // LOAD RIWAYAT
         // =====================================
@@ -369,6 +441,27 @@ const Dashboard = {
             message.textContent =
                 result.message ||
                 "Tidak ada response.";
+
+            message.classList.remove(
+                "error"
+            );
+            message.classList.remove(
+                "success"
+            );
+
+            if (result.status) {
+
+                message.classList.add(
+                    "success"
+                );
+
+            } else {
+
+                message.classList.add(
+                    "error"
+                );
+
+            }
 
         }
 
@@ -471,6 +564,27 @@ const Dashboard = {
             message.textContent =
                 result.message ||
                 "Tidak ada response.";
+
+            message.classList.remove(
+                "error"
+            );
+            message.classList.remove(
+                "success"
+            );
+
+            if (result.status) {
+
+                message.classList.add(
+                    "success"
+                );
+
+            } else {
+
+                message.classList.add(
+                    "error"
+                );
+
+            }
 
         }
 
@@ -763,6 +877,75 @@ const Dashboard = {
                 </div>
 
 
+                <!-- QR ABSENSI -->
+
+                <div class="admin-qr-controls">
+
+                    <button
+                        id="btnShowQrMasuk"
+                        class="btn-primary"
+                        type="button"
+                    >
+                        Tampilkan QR Masuk
+                    </button>
+
+                    <button
+                        id="btnShowQrPulang"
+                        class="btn-success"
+                        type="button"
+                    >
+                        Tampilkan QR Pulang
+                    </button>
+
+                </div>
+
+
+                <div class="admin-qr-grid">
+
+                    <div
+                        id="adminQrCardMasuk"
+                        class="admin-qr-card qr-masuk hidden"
+                    >
+
+                        <h3>
+                            QR Absen Masuk
+                        </h3>
+
+                        <div
+                            id="adminQrMasuk"
+                            class="qr-box"
+                        ></div>
+
+                        <p>
+                            Scan untuk absen masuk.
+                        </p>
+
+                    </div>
+
+
+                    <div
+                        id="adminQrCardPulang"
+                        class="admin-qr-card qr-pulang hidden"
+                    >
+
+                        <h3>
+                            QR Absen Pulang
+                        </h3>
+
+                        <div
+                            id="adminQrPulang"
+                            class="qr-box"
+                        ></div>
+
+                        <p>
+                            Scan untuk absen pulang.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
                 <!-- HEADER DATA -->
 
                 <div class="section-header">
@@ -818,9 +1001,177 @@ const Dashboard = {
         }
 
 
+        const btnShowQrMasuk =
+            document.getElementById(
+                "btnShowQrMasuk"
+            );
+
+        const btnShowQrPulang =
+            document.getElementById(
+                "btnShowQrPulang"
+            );
+
+
+        if (btnShowQrMasuk) {
+
+            btnShowQrMasuk.addEventListener(
+                "click",
+                () => {
+
+                    this.generateAdminQrCodes(
+                        "MASUK"
+                    );
+
+                }
+            );
+
+        }
+
+
+        if (btnShowQrPulang) {
+
+            btnShowQrPulang.addEventListener(
+                "click",
+                () => {
+
+                    this.generateAdminQrCodes(
+                        "PULANG"
+                    );
+
+                }
+            );
+
+        }
+
+
         await this.loadAdminHistory(
             admin
         );
+
+    },
+
+
+    // =========================================
+    // QR ADMIN
+    // =========================================
+
+    normalizeQrValue: function (value) {
+
+        return String(
+            value || ""
+        )
+            .trim()
+            .replace(
+                /\|(MASUK|PULANG)$/i,
+                ""
+            );
+
+    },
+
+
+    generateAdminQrCodes: async function (mode = "MASUK") {
+
+        if (
+            typeof QRCode ===
+            "undefined"
+        ) {
+
+            console.warn(
+                "QRCode library tidak tersedia."
+            );
+
+            return;
+
+        }
+
+        const baseQr =
+            this.normalizeQrValue(
+                CONFIG.QR_CODE
+            );
+
+        const qrCode =
+            `${baseQr}|${mode}`;
+
+        const qrCardId =
+            mode === "PULANG" ?
+                "adminQrCardPulang" :
+                "adminQrCardMasuk";
+
+        const qrBoxId =
+            mode === "PULANG" ?
+                "adminQrPulang" :
+                "adminQrMasuk";
+
+
+        const qrCard =
+            document.getElementById(
+                qrCardId
+            );
+
+        const qrBox =
+            document.getElementById(
+                qrBoxId
+            );
+
+
+        if (!qrCard || !qrBox) {
+
+            return;
+
+        }
+
+
+        qrCard.classList.remove(
+            "hidden"
+        );
+
+
+        const otherCardId =
+            mode === "PULANG" ?
+                "adminQrCardMasuk" :
+                "adminQrCardPulang";
+
+        const otherCard =
+            document.getElementById(
+                otherCardId
+            );
+
+        if (otherCard) {
+
+            otherCard.classList.add(
+                "hidden"
+            );
+
+        }
+
+        try {
+
+            qrBox.innerHTML = "";
+
+            new QRCode(
+                qrBox,
+                {
+                    text: qrCode,
+                    width: 220,
+                    height: 220,
+                    colorDark:
+                        mode === "PULANG" ?
+                            "#198754" :
+                            "#0F4C81",
+                    colorLight: "#ffffff",
+                    correctLevel:
+                        QRCode.CorrectLevel.H
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                "GENERATE QR ERROR:",
+                error
+            );
+
+        }
 
     },
 
@@ -1103,6 +1454,22 @@ const Dashboard = {
                         decodedText || ""
                     ).trim();
 
+                const normalizedQr =
+                    this.normalizeQrValue(
+                        qr
+                    );
+
+                const expectedQr =
+                    this.normalizeQrValue(
+                        CONFIG.QR_CODE
+                    );
+
+                const validQrValues = [
+                    expectedQr,
+                    `${expectedQr}|MASUK`,
+                    `${expectedQr}|PULANG`
+                ];
+
 
                 if (
                     typeof CONFIG.QR_CODE ===
@@ -1131,10 +1498,12 @@ const Dashboard = {
                 // =====================================
 
                 if (
-                    qr !==
-                    String(
-                        CONFIG.QR_CODE
-                    ).trim()
+                    !validQrValues.includes(
+                        qr
+                    ) &&
+                    !validQrValues.includes(
+                        normalizedQr
+                    )
                 ) {
 
                     this.scannedQR = "";

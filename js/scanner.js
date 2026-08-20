@@ -30,7 +30,7 @@ const Scanner = {
                 );
 
                 throw new Error(
-                    "Library QR Scanner belum tersedia."
+                    "Library QR Scanner belum tersedia. Pastikan file assets/lib/html5-qrcode.min.js sudah ada."
                 );
 
             }
@@ -44,6 +44,25 @@ const Scanner = {
             ) {
 
                 await this.stop();
+
+            }
+
+            if (this.html5QrCode) {
+
+                try {
+
+                    await this.html5QrCode.clear();
+
+                } catch (clearError) {
+
+                    console.warn(
+                        "CLEAR SCANNER WARNING:",
+                        clearError
+                    );
+
+                }
+
+                this.html5QrCode = null;
 
             }
 
@@ -183,10 +202,21 @@ const Scanner = {
 
                 await this.html5QrCode.stop();
 
+                try {
 
-                this.isRunning =
-                    false;
+                    await this.html5QrCode.clear();
 
+                } catch (clearError) {
+
+                    console.warn(
+                        "CLEAR SCANNER WARNING:",
+                        clearError
+                    );
+
+                }
+
+                this.html5QrCode = null;
+                this.isRunning = false;
 
                 console.log(
                     "QR Scanner dihentikan."
@@ -194,12 +224,18 @@ const Scanner = {
 
             }
 
+            this.isRunning = false;
+            this.lastResult = "";
+
         } catch (error) {
 
             console.error(
                 "STOP SCANNER ERROR:",
                 error
             );
+
+            this.isRunning = false;
+            this.lastResult = "";
 
         }
 
