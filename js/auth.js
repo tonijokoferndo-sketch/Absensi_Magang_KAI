@@ -199,6 +199,11 @@ const Auth = {
                         data.nama || ""
                     ).trim(),
 
+                email:
+                    String(
+                        data.email || ""
+                    ).trim(),
+
                 password:
                     String(
                         data.password || ""
