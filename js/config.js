@@ -15,9 +15,7 @@ const CONFIG = {
     // GOOGLE APPS SCRIPT API
     // =========================================
 
-    API_URL:
-        "https://script.google.com/macros/s/AKfycbyKOU6tJYF7trGALzD2qd62iMmWGHSxlpSyrPp6ML7Lo5oOwwF3VkNZm4UO4gRaRCZJ/exec",
-
+    API_URL: "https://script.google.com/macros/s/AKfycby_KKfyfXYPfGm7DGSEHdPh-bw4siIw9K0ug3Jmu1qhCk-v52U9jtKq6iwkqIVScV3S/exec",
 
     // =========================================
     // QR CODE ABSENSI
