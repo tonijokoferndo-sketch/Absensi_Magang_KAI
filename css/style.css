@@ -586,7 +586,7 @@ button {
 
 .admin-history-controls {
     display: grid;
-    grid-template-columns: auto minmax(180px, 1fr) auto auto;
+    grid-template-columns: minmax(180px, 1fr) auto auto;
     align-items: center;
     gap: 10px;
     margin: 14px 0;
@@ -600,6 +600,12 @@ button {
 .admin-history-controls button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.admin-history-note {
+    margin: -4px 0 12px;
+    color: #64748b;
+    font-size: 0.9rem;
 }
 
 .print-report-title {

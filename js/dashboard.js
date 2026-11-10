@@ -11,8 +11,8 @@ const Dashboard = {
     qrClockTimer: null,
     qrVisibilityHandler: null,
     adminHistoryData: [],
-    adminQrSlots: [],
-    adminQrSlotIndex: -1,
+    adminUser: null,
+    lastAdminHistorySlot: null,
 
     getSlot: function (now = Date.now()) {
 
@@ -240,13 +240,16 @@ const Dashboard = {
 
 
         if (this.activeQrSlot !== currentSlot) {
-
-            await this.generateAdminQrCodes(
-                this.activeQrMode
-            );
-
+            await Promise.all([
+                this.generateAdminQrCodes(this.activeQrMode),
+                this.loadAdminHistory(this.adminUser)
+            ]);
             return;
 
+        }
+
+        if (this.lastAdminHistorySlot !== currentSlot) {
+            await this.loadAdminHistory(this.adminUser);
         }
 
 
@@ -1252,6 +1255,7 @@ if (btnBukaKamera) {
     // =========================================
 
     showAdmin: async function (admin) {
+        this.adminUser = admin;
 
         const content =
             document.getElementById(
@@ -1304,7 +1308,7 @@ if (btnBukaKamera) {
 
 
                         <span>
-                            Total Absensi
+                            Absensi Periode QR Aktif
                         </span>
 
                     </div>
@@ -1441,20 +1445,17 @@ if (btnBukaKamera) {
                 </div>
 
                 <div class="admin-history-controls">
-                    <button id="btnAdminQrPrev" class="btn-secondary" type="button" aria-label="Periode QR sebelumnya">
-                        Sebelumnya
-                    </button>
                     <strong id="adminQrPeriodLabel">Memuat periode QR...</strong>
-                    <button id="btnAdminQrNext" class="btn-secondary" type="button" aria-label="Periode QR berikutnya">
-                        Berikutnya
-                    </button>
                     <button id="btnAdminPrintHistory" class="btn-primary" type="button" disabled>
-                        Cetak Periode Ini
+                        Cetak Periode Aktif
                     </button>
                     <button id="btnAdminDownloadHistory" class="btn-secondary" type="button" disabled>
-                        Unduh CSV
+                        Unduh CSV Aktif
                     </button>
                 </div>
+                <p class="admin-history-note">
+                    Dashboard hanya menampilkan absensi dari periode QR aktif. Data periode sebelumnya tetap tersimpan di spreadsheet.
+                </p>
 
                 <!-- DATA -->
 
@@ -1491,32 +1492,10 @@ if (btnBukaKamera) {
 
         }
 
-        const previousQrPeriod =
-            document.getElementById("btnAdminQrPrev");
-        const nextQrPeriod =
-            document.getElementById("btnAdminQrNext");
         const printHistory =
             document.getElementById("btnAdminPrintHistory");
         const downloadHistory =
             document.getElementById("btnAdminDownloadHistory");
-
-        if (previousQrPeriod) {
-            previousQrPeriod.addEventListener("click", () => {
-                if (this.adminQrSlotIndex > 0) {
-                    this.adminQrSlotIndex -= 1;
-                    this.renderAdminHistoryPeriod();
-                }
-            });
-        }
-
-        if (nextQrPeriod) {
-            nextQrPeriod.addEventListener("click", () => {
-                if (this.adminQrSlotIndex < this.adminQrSlots.length - 1) {
-                    this.adminQrSlotIndex += 1;
-                    this.renderAdminHistoryPeriod();
-                }
-            });
-        }
 
         if (printHistory) {
             printHistory.addEventListener("click", () => window.print());
@@ -2005,29 +1984,13 @@ if (btnBukaKamera) {
 
 
             const data = result.riwayat || [];
-            const selectedSlot = this.adminQrSlots[this.adminQrSlotIndex];
-            const slots = new Set();
-            let hasLegacyRows = false;
-            data.forEach((item) => {
-                const checkInSlot = String(item.qrMasukSlot || "").trim();
-                const checkOutSlot = String(item.qrPulangSlot || "").trim();
-                if (checkInSlot) slots.add(checkInSlot);
-                if (checkOutSlot) slots.add(checkOutSlot);
-                if (!checkInSlot && !checkOutSlot) hasLegacyRows = true;
-            });
-
-            this.adminQrSlots = Array.from(slots).sort((left, right) =>
-                Number(left) - Number(right)
-            );
-            if (hasLegacyRows) {
-                this.adminQrSlots.unshift("legacy");
-            }
             this.adminHistoryData = data;
-            const previousIndex = this.adminQrSlots.indexOf(selectedSlot);
-            this.adminQrSlotIndex = previousIndex >= 0
-                ? previousIndex
-                : this.adminQrSlots.length - 1;
-
+            const currentSlot = String(this.getSlot());
+            this.lastAdminHistorySlot = Number(currentSlot);
+            const currentPeriodData = data.filter((item) =>
+                String(item.qrMasukSlot || "").trim() === currentSlot ||
+                String(item.qrPulangSlot || "").trim() === currentSlot
+            );
 
             const total =
                 document.getElementById(
@@ -2038,7 +2001,7 @@ if (btnBukaKamera) {
             if (total) {
 
                 total.textContent =
-                    data.length;
+                    currentPeriodData.length;
 
             }
 
@@ -2055,9 +2018,6 @@ if (btnBukaKamera) {
     },
 
     getAdminQrPeriodLabel: function (slot) {
-        if (slot === "legacy") {
-            return "Data lama (QR belum tercatat)";
-        }
         const start = Number(slot) * QR_SLOT_MS - QR_WIB_OFFSET;
         const end = (Number(slot) + 1) * QR_SLOT_MS - QR_WIB_OFFSET;
         return `${this.formatWibDateTime(start)} - ${this.formatWibDateTime(end)}`;
@@ -2066,35 +2026,19 @@ if (btnBukaKamera) {
     renderAdminHistoryPeriod: function () {
         const container = document.getElementById("adminHistory");
         const label = document.getElementById("adminQrPeriodLabel");
-        const previous = document.getElementById("btnAdminQrPrev");
-        const next = document.getElementById("btnAdminQrNext");
         const print = document.getElementById("btnAdminPrintHistory");
         const download = document.getElementById("btnAdminDownloadHistory");
         if (!container) return;
 
-        if (this.adminQrSlotIndex < 0 || !this.adminQrSlots.length) {
-            if (label) label.textContent = "Belum ada data absensi";
-            if (previous) previous.disabled = true;
-            if (next) next.disabled = true;
-            if (print) print.disabled = true;
-            if (download) download.disabled = true;
-            container.innerHTML = '<div class="empty">Belum ada data absensi.</div>';
-            return;
-        }
-
-        const slot = this.adminQrSlots[this.adminQrSlotIndex];
+        const slot = String(this.getSlot());
         const reportData = this.adminHistoryData.filter((item) => {
             const checkInSlot = String(item.qrMasukSlot || "").trim();
             const checkOutSlot = String(item.qrPulangSlot || "").trim();
-            return slot === "legacy"
-                ? !checkInSlot && !checkOutSlot
-                : checkInSlot === slot || checkOutSlot === slot;
+            return checkInSlot === slot || checkOutSlot === slot;
         });
         const periodLabel = this.getAdminQrPeriodLabel(slot);
 
-        if (label) label.textContent = periodLabel;
-        if (previous) previous.disabled = this.adminQrSlotIndex <= 0;
-        if (next) next.disabled = this.adminQrSlotIndex >= this.adminQrSlots.length - 1;
+        if (label) label.textContent = `Periode QR aktif: ${periodLabel}`;
         if (print) print.disabled = reportData.length === 0;
         if (download) download.disabled = reportData.length === 0;
 
@@ -2141,17 +2085,11 @@ if (btnBukaKamera) {
     },
 
     downloadAdminHistoryPeriod: function () {
-        if (this.adminQrSlotIndex < 0 || !this.adminQrSlots.length) {
-            return;
-        }
-
-        const slot = this.adminQrSlots[this.adminQrSlotIndex];
+        const slot = String(this.getSlot());
         const reportData = this.adminHistoryData.filter((item) => {
             const checkInSlot = String(item.qrMasukSlot || "").trim();
             const checkOutSlot = String(item.qrPulangSlot || "").trim();
-            return slot === "legacy"
-                ? !checkInSlot && !checkOutSlot
-                : checkInSlot === slot || checkOutSlot === slot;
+            return checkInSlot === slot || checkOutSlot === slot;
         });
         if (!reportData.length) return;
 
@@ -2186,11 +2124,8 @@ if (btnBukaKamera) {
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        const filePeriod = slot === "legacy"
-            ? "data-lama"
-            : String(slot);
         link.href = url;
-        link.download = `laporan-absensi-qr-${filePeriod}.csv`;
+        link.download = `laporan-absensi-qr-${slot}.csv`;
         document.body.appendChild(link);
         link.click();
         link.remove();
