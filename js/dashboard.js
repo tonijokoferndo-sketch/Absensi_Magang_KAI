@@ -311,6 +311,11 @@ const Dashboard = {
                 "Halo, " + user.nama;
         }
 
+        if (user.mustChangePassword) {
+            this.showTemporaryPasswordChange(user);
+            return;
+        }
+
         if (user.role === "admin") {
 
             await this.showAdmin(user);
@@ -321,6 +326,102 @@ const Dashboard = {
 
         }
 
+    },
+
+    showTemporaryPasswordChange: function (user) {
+
+        const content =
+            document.getElementById("dashboardContent");
+
+        if (!content) {
+            return;
+        }
+
+        content.innerHTML = `
+            <section class="password-change-card">
+                <h2>Ganti Sandi Sementara</h2>
+                <p>Admin mengatur ulang sandi akun Anda. Buat sandi baru sebelum melanjutkan.</p>
+                <form id="temporaryPasswordForm">
+                    <label for="newPassword">Sandi baru</label>
+                    <input id="newPassword" name="newPassword" type="password"
+                        minlength="8" autocomplete="new-password" required>
+
+                    <label for="confirmNewPassword">Ulangi sandi baru</label>
+                    <input id="confirmNewPassword" name="confirmNewPassword" type="password"
+                        minlength="8" autocomplete="new-password" required>
+
+                    <p id="passwordChangeMessage" class="message" role="status"></p>
+                    <button class="btn-primary" type="submit">Simpan Sandi Baru</button>
+                </form>
+            </section>
+        `;
+
+        const form =
+            document.getElementById("temporaryPasswordForm");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const newPassword =
+                document.getElementById("newPassword").value;
+            const confirmation =
+                document.getElementById("confirmNewPassword").value;
+            const message =
+                document.getElementById("passwordChangeMessage");
+
+            if (newPassword.length < 8) {
+                message.textContent =
+                    "Sandi baru minimal 8 karakter.";
+                message.classList.add("error");
+                return;
+            }
+
+            if (newPassword !== confirmation) {
+                message.textContent =
+                    "Konfirmasi sandi tidak sama.";
+                message.classList.add("error");
+                return;
+            }
+
+            const submitButton =
+                form.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            message.textContent = "Menyimpan sandi...";
+            message.classList.remove("error", "success");
+
+            try {
+                const result =
+                    await apiRequest("change_password", {
+                        newPassword: newPassword
+                    });
+
+                if (!result || !result.status || !result.sessionToken) {
+                    throw new Error(
+                        result && result.message
+                            ? result.message
+                            : "Sandi gagal diperbarui."
+                    );
+                }
+
+                const updatedUser = {
+                    ...user,
+                    sessionToken: result.sessionToken,
+                    mustChangePassword: false,
+                    sessionVersion:
+                        Number(result.user.sessionVersion || 0)
+                };
+                localStorage.setItem(
+                    "user",
+                    JSON.stringify(updatedUser)
+                );
+                await this.show();
+            } catch (error) {
+                message.textContent =
+                    error.message || "Sandi gagal diperbarui.";
+                message.classList.add("error");
+                submitButton.disabled = false;
+            }
+        });
     },
 
 
@@ -1208,6 +1309,21 @@ if (btnBukaKamera) {
                 </div>
 
 
+                <section class="admin-user-management">
+                    <div class="section-header">
+                        <div>
+                            <h3>Kelola Akun User</h3>
+                            <p>Reset akan membuat sandi sementara yang harus diganti saat user login berikutnya.</p>
+                        </div>
+                        <button id="btnAdminUsersRefresh" class="btn-secondary" type="button">
+                            Muat Ulang
+                        </button>
+                    </div>
+                    <div id="adminResetResult" class="message" role="status"></div>
+                    <div id="adminUsers">Memuat akun user...</div>
+                </section>
+
+
                 <!-- QR ABSENSI -->
 
                 <div class="admin-qr-controls">
@@ -1351,6 +1467,77 @@ if (btnBukaKamera) {
 
         }
 
+        const usersRefresh =
+            document.getElementById("btnAdminUsersRefresh");
+
+        if (usersRefresh) {
+            usersRefresh.addEventListener(
+                "click",
+                () => this.loadAdminUsers()
+            );
+        }
+
+        const adminUsers =
+            document.getElementById("adminUsers");
+
+        if (adminUsers) {
+            adminUsers.addEventListener("click", async (event) => {
+                const button =
+                    event.target.closest("[data-reset-user]");
+
+                if (!button || button.disabled) {
+                    return;
+                }
+
+                const nim =
+                    button.getAttribute("data-reset-user");
+
+                if (!window.confirm(
+                    `Buat sandi sementara baru untuk NIM ${nim}? Sandi lama tidak akan berlaku.`
+                )) {
+                    return;
+                }
+
+                button.disabled = true;
+                const resultContainer =
+                    document.getElementById("adminResetResult");
+                resultContainer.textContent =
+                    "Membuat sandi sementara...";
+                resultContainer.classList.remove("error", "success");
+
+                try {
+                    const result =
+                        await apiRequest("reset_password", { nim: nim });
+
+                    if (
+                        !result ||
+                        !result.status ||
+                        !result.temporaryPassword
+                    ) {
+                        throw new Error(
+                            result && result.message
+                                ? result.message
+                                : "Reset sandi gagal."
+                        );
+                    }
+
+                    resultContainer.classList.add("success");
+                    resultContainer.innerHTML = `
+                        <p>${this.escape(result.message)}</p>
+                        <p>Sandi sementara untuk NIM ${this.escape(nim)}:</p>
+                        <code class="temporary-password">${this.escape(result.temporaryPassword)}</code>
+                        <p>Salin dan sampaikan secara pribadi kepada user. Sandi ini hanya ditampilkan sekarang.</p>
+                    `;
+                    await this.loadAdminUsers();
+                } catch (error) {
+                    resultContainer.textContent =
+                        error.message || "Reset sandi gagal.";
+                    resultContainer.classList.add("error");
+                    button.disabled = false;
+                }
+            });
+        }
+
 
         const btnShowQrMasuk =
             document.getElementById(
@@ -1407,6 +1594,82 @@ if (btnBukaKamera) {
             admin
         );
 
+        await this.loadAdminUsers();
+
+    },
+
+
+    loadAdminUsers: async function () {
+
+        const container =
+            document.getElementById("adminUsers");
+
+        if (!container) {
+            return;
+        }
+
+        container.textContent = "Memuat akun user...";
+
+        try {
+            const result =
+                await apiRequest("list_users");
+
+            if (!result || !result.status) {
+                throw new Error(
+                    result && result.message
+                        ? result.message
+                        : "Daftar akun gagal dimuat."
+                );
+            }
+
+            const users = result.users || [];
+            if (users.length === 0) {
+                container.innerHTML =
+                    '<p class="empty">Belum ada akun user.</p>';
+                return;
+            }
+
+            const rows = users.map((user) => `
+                <tr>
+                    <td>${this.escape(user.nim)}</td>
+                    <td>${this.escape(user.nama)}</td>
+                    <td>${this.escape(user.email || "-")}</td>
+                    <td>${this.escape(user.divisi || "-")}</td>
+                    <td>${this.escape(user.tanggalDaftar || "-")}</td>
+                    <td>
+                        <button
+                            class="btn-secondary admin-reset-password"
+                            type="button"
+                            data-reset-user="${this.escape(user.nim)}"
+                        >Reset sandi</button>
+                    </td>
+                </tr>
+            `).join("");
+
+            container.innerHTML = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>NIM</th>
+                                <th>Nama</th>
+                                <th>Email</th>
+                                <th>Divisi</th>
+                                <th>Tanggal Daftar</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        } catch (error) {
+            container.innerHTML = `
+                <p class="error">${this.escape(
+                    error.message || "Daftar akun gagal dimuat."
+                )}</p>
+            `;
+        }
     },
 
 

@@ -28,7 +28,7 @@ const Auth = {
             }
 
 
-            // Login melalui Netlify Function.
+            // Login melalui API Apps Script.
             const result =
                 await apiRequest(
                     "login",
@@ -91,7 +91,18 @@ const Auth = {
                         result.user.role || "user"
                     )
                     .toLowerCase()
-                    .trim()
+                    .trim(),
+
+                mustChangePassword:
+                    Boolean(
+                        result.mustChangePassword ||
+                        result.user.mustChangePassword
+                    ),
+
+                sessionVersion:
+                    Number(
+                        result.user.sessionVersion || 0
+                    )
 
             };
 

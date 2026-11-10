@@ -492,6 +492,81 @@ button {
 
 }
 
+.admin-user-management,
+.password-change-card {
+
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 18px;
+    margin: 20px 0;
+    border: 1px solid #e4eaf0;
+
+}
+
+.admin-user-management .section-header > div {
+    min-width: 0;
+}
+
+.admin-user-management .section-header p,
+.password-change-card > p {
+    color: #64748b;
+    line-height: 1.5;
+    margin-top: 6px;
+}
+
+.admin-user-management .admin-reset-password {
+    white-space: nowrap;
+}
+
+.password-change-card {
+    max-width: 520px;
+    margin: 24px auto;
+}
+
+.password-change-card h2 {
+    margin-bottom: 8px;
+}
+
+.password-change-card form {
+    display: grid;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.password-change-card input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+}
+
+.temporary-password {
+    display: inline-block;
+    margin: 8px 0;
+    padding: 10px 12px;
+    border: 1px dashed #0f4c81;
+    border-radius: 6px;
+    background: #f2f6fa;
+    color: #0f4c81;
+    font-size: 1.1rem;
+    font-weight: 700;
+    user-select: all;
+}
+
+.admin-user-management .message:empty {
+    display: none;
+}
+
+.admin-user-management .message {
+    margin: 12px 0;
+}
+
+.admin-user-management td,
+.admin-user-management th {
+    min-width: 110px;
+}
+
 
 .admin-qr-controls button {
 

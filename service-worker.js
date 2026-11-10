@@ -5,7 +5,7 @@
 // perubahan file (css/js/html) supaya cache lama
 // dibersihkan dan pengguna dapat versi terbaru.
 
-const CACHE_VERSION = "kai-absensi-v4";
+const CACHE_VERSION = "kai-absensi-v5";
 
 // Semua path relatif terhadap lokasi service-worker.js
 // (penting untuk GitHub Pages yang biasanya berada di
