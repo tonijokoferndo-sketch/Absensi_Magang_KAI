@@ -115,47 +115,6 @@ const Auth = {
                 );
 
 
-            if (localAccount) {
-
-                if (
-                    localAccount.role !== "admin" ||
-                    localAccount.password !== password
-                ) {
-
-                    return {
-                        status: false,
-                        message: "NIM atau password salah."
-                    };
-
-                }
-
-
-                const user = {
-
-                    nim: localAccount.nim,
-                    nama: localAccount.nama,
-                    email: localAccount.email || "",
-                    divisi: localAccount.divisi || "",
-                    role: "admin"
-
-                };
-
-
-                localStorage.setItem(
-                    "user",
-                    JSON.stringify(user)
-                );
-
-
-                return {
-                    status: true,
-                    message: "Login berhasil.",
-                    user: user
-                };
-
-            }
-
-
             // Kirim ke Google Apps Script
             const result =
                 await apiRequest(
@@ -169,6 +128,38 @@ const Auth = {
 
             // Login gagal
             if (!result || !result.status) {
+
+                if (
+                    localAccount &&
+                    localAccount.role === "admin" &&
+                    localAccount.password === password
+                ) {
+
+                    const localUser = {
+
+                        nim: localAccount.nim,
+                        nama: localAccount.nama,
+                        email: localAccount.email || "",
+                        divisi: localAccount.divisi || "",
+                        role: "admin"
+
+                    };
+
+
+                    localStorage.setItem(
+                        "user",
+                        JSON.stringify(localUser)
+                    );
+
+
+                    return {
+                        status: true,
+                        message: "Login berhasil.",
+                        user: localUser
+                    };
+
+                }
+
 
                 return result || {
                     status: false,
