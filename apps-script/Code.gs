@@ -1,4 +1,4 @@
-const FIELD_ALIASES = {
+const KAI_FIELD_ALIASES = {
   nim: ["nim", "nomorindukmahasiswa", "nomorinduk", "studentid", "username"],
   nama: ["nama", "namalengkap", "name", "fullname"],
   email: ["email", "alamatemail"],
@@ -15,20 +15,20 @@ const FIELD_ALIASES = {
   status: ["status", "keterangan"]
 };
 
-const DEFAULT_HEADERS = {
+const KAI_DEFAULT_HEADERS = {
   users: ["NIM", "Nama", "Email", "Divisi", "Password", "Tanggal Daftar", "Role", "Password Hash", "Wajib Ganti Password", "Session Version"],
   attendance: ["NIM", "Nama", "Tanggal", "Jam Masuk", "Jam Pulang", "Status"]
 };
 
-const MASKED_PASSWORD = "****";
+const KAI_MASKED_PASSWORD = "****";
 
 function doPost(event) {
   try {
     const body = JSON.parse(event.postData.contents || "{}");
-    const result = route(body);
-    return jsonResponse(result);
+    const result = kaiRoute(body);
+    return kaiJsonResponse(result);
   } catch (error) {
-    return jsonResponse({
+    return kaiJsonResponse({
       status: false,
       message: error.publicMessage || "Terjadi kesalahan pada server."
     });
@@ -36,72 +36,73 @@ function doPost(event) {
 }
 
 function doGet() {
-  return jsonResponse({
+  return kaiJsonResponse({
     status: true,
-    message: "Absensi Magang KAI API siap."
+    message: "Absensi Magang KAI API siap.",
+    version: "accounts-password-date-v2"
   });
 }
 
 function tidyUsersSheet() {
-  readTable("users");
+  kaiReadTable("users");
 }
 
-function jsonResponse(value) {
+function kaiJsonResponse(value) {
   return ContentService
     .createTextOutput(JSON.stringify(value))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function setting(name) {
+function kaiSetting(name) {
   const value = PropertiesService.getScriptProperties().getProperty(name);
   if (!value) {
-    throw apiError("Konfigurasi server belum lengkap: " + name + ".");
+    throw kaiApiError("Konfigurasi server belum lengkap: " + name + ".");
   }
   return value;
 }
 
-function apiError(message) {
+function kaiApiError(message) {
   const error = new Error(message);
   error.publicMessage = message;
   return error;
 }
 
-function route(body) {
+function kaiRoute(body) {
   switch (body.action) {
     case "login":
-      return login(body);
+      return kaiLogin(body);
     case "register":
-      return register(body);
+      return kaiRegister(body);
     case "list_users":
-      return listUsers(body);
+      return kaiListUsers(body);
     case "reset_password":
-      return resetUserPassword(body);
+      return kaiResetUserPassword(body);
     case "change_password":
-      return changeTemporaryPassword(body);
+      return kaiChangeTemporaryPassword(body);
     case "qr_current":
-      return currentQr(body);
+      return kaiCurrentQr(body);
     case "absen_masuk":
     case "absen_pulang":
-      return updateAttendance(body, body.action);
+      return kaiUpdateAttendance(body, body.action);
     case "riwayat":
-      return getHistory(body, false);
+      return kaiGetHistory(body, false);
     case "riwayat_semua":
-      return getHistory(body, true);
+      return kaiGetHistory(body, true);
     default:
-      throw apiError("Aksi tidak dikenali.");
+      throw kaiApiError("Aksi tidak dikenali.");
   }
 }
 
-function spreadsheet() {
-  return SpreadsheetApp.openById(setting("SPREADSHEET_ID"));
+function kaiSpreadsheet() {
+  return SpreadsheetApp.openById(kaiSetting("SPREADSHEET_ID"));
 }
 
-function sheetName(key) {
+function kaiSheetName(key) {
   const property = key === "users" ? "USERS_SHEET" : "ATTENDANCE_SHEET";
   return PropertiesService.getScriptProperties().getProperty(property) || key;
 }
 
-function normalizedHeader(value) {
+function kaiNormalizedHeader(value) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -109,15 +110,15 @@ function normalizedHeader(value) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function fieldIndex(headers, field) {
+function kaiFieldIndex(headers, field) {
   return headers.findIndex(function (header) {
-    return FIELD_ALIASES[field].indexOf(normalizedHeader(header)) !== -1;
+    return KAI_FIELD_ALIASES[field].indexOf(kaiNormalizedHeader(header)) !== -1;
   });
 }
 
-function readTable(key) {
-  const book = spreadsheet();
-  const name = sheetName(key);
+function kaiReadTable(key) {
+  const book = kaiSpreadsheet();
+  const name = kaiSheetName(key);
   let sheet = book.getSheetByName(name);
   if (!sheet) {
     sheet = book.insertSheet(name);
@@ -126,7 +127,7 @@ function readTable(key) {
   let lastRow = sheet.getLastRow();
   let lastColumn = sheet.getLastColumn();
   if (!lastRow || !lastColumn) {
-    const headers = DEFAULT_HEADERS[key];
+    const headers = KAI_DEFAULT_HEADERS[key];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     lastRow = 1;
     lastColumn = headers.length;
@@ -139,7 +140,7 @@ function readTable(key) {
   let changed = false;
 
   required.forEach(function (field) {
-    if (fieldIndex(headers, field) < 0) {
+    if (kaiFieldIndex(headers, field) < 0) {
       const defaultIndex = key === "users"
         ? {
           nim: 0,
@@ -152,7 +153,7 @@ function readTable(key) {
           sessionVersion: 9
         }[field]
         : ["nim", "nama", "tanggal", "jamMasuk", "jamPulang", "status"].indexOf(field);
-      headers.push(DEFAULT_HEADERS[key][defaultIndex]);
+      headers.push(KAI_DEFAULT_HEADERS[key][defaultIndex]);
       changed = true;
     }
   });
@@ -168,12 +169,12 @@ function readTable(key) {
   const rows = values.map(function (row, index) {
     return {
       rowNumber: index + 2,
-      values: padRow(headers, row)
+      values: kaiPadRow(headers, row)
     };
   });
 
   if (key === "users") {
-    migrateAndFormatUsers(sheet, headers, rows);
+    kaiMigrateAndFormatUsers(sheet, headers, rows);
   }
 
   return {
@@ -183,40 +184,40 @@ function readTable(key) {
   };
 }
 
-function migrateAndFormatUsers(sheet, headers, rows) {
-  const passwordIndex = fieldIndex(headers, "password");
-  const hashIndex = fieldIndex(headers, "passwordHash");
-  const dateIndex = fieldIndex(headers, "tanggalDaftar");
+function kaiMigrateAndFormatUsers(sheet, headers, rows) {
+  const passwordIndex = kaiFieldIndex(headers, "password");
+  const hashIndex = kaiFieldIndex(headers, "passwordHash");
+  const dateIndex = kaiFieldIndex(headers, "tanggalDaftar");
 
   rows.forEach(function (row) {
     const displayedPassword = String(row.values[passwordIndex] || "");
     const storedHash = String(row.values[hashIndex] || "");
     let changed = false;
 
-    if (displayedPassword && !isMaskedPassword(displayedPassword)) {
+    if (displayedPassword && !kaiIsMaskedPassword(displayedPassword)) {
       if (!storedHash) {
-        row.values[hashIndex] = isPasswordHash(displayedPassword)
+        row.values[hashIndex] = kaiIsPasswordHash(displayedPassword)
           ? displayedPassword
-          : passwordHash(displayedPassword, Utilities.getUuid());
+          : kaiPasswordHash(displayedPassword, Utilities.getUuid());
       }
-      row.values[passwordIndex] = MASKED_PASSWORD;
+      row.values[passwordIndex] = KAI_MASKED_PASSWORD;
       changed = true;
     } else if (
-      displayedPassword !== MASKED_PASSWORD &&
-      (storedHash || isMaskedPassword(displayedPassword))
+      displayedPassword !== KAI_MASKED_PASSWORD &&
+      (storedHash || kaiIsMaskedPassword(displayedPassword))
     ) {
-      row.values[passwordIndex] = MASKED_PASSWORD;
+      row.values[passwordIndex] = KAI_MASKED_PASSWORD;
       changed = true;
     }
 
     if (changed) {
-      writeRow({ sheet: sheet }, row.rowNumber, row.values);
+      kaiWriteRow({ sheet: sheet }, row.rowNumber, row.values);
     }
   });
 
   const passwordHashColumn = hashIndex + 1;
   sheet.hideColumns(passwordHashColumn);
-  sheet.hideColumns(fieldIndex(headers, "sessionVersion") + 1);
+  sheet.hideColumns(kaiFieldIndex(headers, "sessionVersion") + 1);
   sheet.setFrozenRows(1);
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight("bold")
@@ -227,21 +228,21 @@ function migrateAndFormatUsers(sheet, headers, rows) {
   sheet.setColumnWidth(dateIndex + 1, 170);
 }
 
-function padRow(headers, values) {
+function kaiPadRow(headers, values) {
   return Array.from({ length: headers.length }, function (_, index) {
     return values[index] || "";
   });
 }
 
-function valueFor(headers, values, field) {
-  const index = fieldIndex(headers, field);
+function kaiValueFor(headers, values, field) {
+  const index = kaiFieldIndex(headers, field);
   return index < 0 ? "" : String(values[index] || "").trim();
 }
 
-function rowFor(headers, fields) {
+function kaiRowFor(headers, fields) {
   const row = Array(headers.length).fill("");
   Object.keys(fields).forEach(function (field) {
-    const index = fieldIndex(headers, field);
+    const index = kaiFieldIndex(headers, field);
     if (index >= 0) {
       row[index] = fields[field];
     }
@@ -249,19 +250,19 @@ function rowFor(headers, fields) {
   return row;
 }
 
-function findRow(table, predicate) {
+function kaiFindRow(table, predicate) {
   return table.rows.find(predicate);
 }
 
-function writeRow(table, rowNumber, values) {
+function kaiWriteRow(table, rowNumber, values) {
   table.sheet.getRange(rowNumber, 1, 1, values.length).setValues([values]);
 }
 
-function appendRow(table, values) {
-  table.sheet.appendRow(values);
+function kaiAppendRow(table, values) {
+  table.sheet.kaiAppendRow(values);
 }
 
-function digestHex(text) {
+function kaiDigestHex(text) {
   return Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
     text,
@@ -271,29 +272,29 @@ function digestHex(text) {
   }).join("");
 }
 
-function passwordHash(password, salt) {
-  return "sha256$" + salt + "$" + digestHex(salt + "|" + password);
+function kaiPasswordHash(password, salt) {
+  return "sha256$" + salt + "$" + kaiDigestHex(salt + "|" + password);
 }
 
-function isPasswordHash(value) {
+function kaiIsPasswordHash(value) {
   return /^sha256\$[^$]+\$[0-9a-f]{64}$/i.test(String(value || ""));
 }
 
-function isMaskedPassword(value) {
+function kaiIsMaskedPassword(value) {
   return ["****", "********", "••••••••"].indexOf(
     String(value || "")
   ) !== -1;
 }
 
-function verifyPassword(password, stored) {
+function kaiVerifyPassword(password, stored) {
   const parts = String(stored || "").split("$");
   if (parts.length === 3 && parts[0] === "sha256") {
-    return passwordHash(password, parts[1]) === stored;
+    return kaiPasswordHash(password, parts[1]) === stored;
   }
   return String(password) === String(stored || "");
 }
 
-function signSession(user) {
+function kaiSignSession(user) {
   const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
     nim: user.nim,
     nama: user.nama,
@@ -303,21 +304,21 @@ function signSession(user) {
     exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
   })).replace(/=+$/, "");
   const signature = Utilities.base64EncodeWebSafe(
-    Utilities.computeHmacSha256Signature(payload, setting("SESSION_SECRET"))
+    Utilities.computeHmacSha256Signature(payload, kaiSetting("SESSION_SECRET"))
   ).replace(/=+$/, "");
   return payload + "." + signature;
 }
 
-function verifySession(token) {
+function kaiVerifySession(token) {
   const parts = String(token || "").split(".");
   if (parts.length !== 2) {
-    throw apiError("Sesi tidak valid. Silakan login kembali.");
+    throw kaiApiError("Sesi tidak valid. Silakan login kembali.");
   }
   const expected = Utilities.base64EncodeWebSafe(
-    Utilities.computeHmacSha256Signature(parts[0], setting("SESSION_SECRET"))
+    Utilities.computeHmacSha256Signature(parts[0], kaiSetting("SESSION_SECRET"))
   ).replace(/=+$/, "");
   if (parts[1] !== expected) {
-    throw apiError("Sesi tidak valid. Silakan login kembali.");
+    throw kaiApiError("Sesi tidak valid. Silakan login kembali.");
   }
   let session;
   try {
@@ -325,102 +326,102 @@ function verifySession(token) {
       Utilities.base64DecodeWebSafe(parts[0])
     ).getDataAsString());
   } catch (error) {
-    throw apiError("Sesi tidak valid. Silakan login kembali.");
+    throw kaiApiError("Sesi tidak valid. Silakan login kembali.");
   }
   if (!session.nim || session.exp <= Math.floor(Date.now() / 1000)) {
-    throw apiError("Sesi berakhir. Silakan login kembali.");
+    throw kaiApiError("Sesi berakhir. Silakan login kembali.");
   }
   return session;
 }
 
-function login(body) {
+function kaiLogin(body) {
   const nim = String(body.nim || "").trim();
   const password = String(body.password || "");
   if (!nim || !password) {
-    throw apiError("NIM dan Password wajib diisi.");
+    throw kaiApiError("NIM dan Password wajib diisi.");
   }
 
-  const adminNim = setting("ADMIN_NIM");
+  const adminNim = kaiSetting("ADMIN_NIM");
   if (nim === adminNim) {
-    if (password !== setting("ADMIN_PASSWORD")) {
-      throw apiError("NIM atau password salah.");
+    if (password !== kaiSetting("ADMIN_PASSWORD")) {
+      throw kaiApiError("NIM atau password salah.");
     }
     const admin = { nim: adminNim, nama: "Administrator", role: "admin" };
     return {
       status: true,
       message: "Login berhasil.",
       user: admin,
-      sessionToken: signSession(admin)
+      sessionToken: kaiSignSession(admin)
     };
   }
 
-  const table = readTable("users");
-  const account = findRow(table, function (row) {
-    return valueFor(table.headers, row.values, "nim") === nim;
+  const table = kaiReadTable("users");
+  const account = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === nim;
   });
-  if (!account || !verifyPassword(
+  if (!account || !kaiVerifyPassword(
     password,
-    valueFor(table.headers, account.values, "passwordHash")
+    kaiValueFor(table.headers, account.values, "passwordHash")
   )) {
-    throw apiError("NIM atau password salah.");
+    throw kaiApiError("NIM atau password salah.");
   }
 
   const user = {
     nim: nim,
-    nama: valueFor(table.headers, account.values, "nama"),
-    email: valueFor(table.headers, account.values, "email"),
-    divisi: valueFor(table.headers, account.values, "divisi"),
-    role: valueFor(table.headers, account.values, "role").toLowerCase() === "admin"
+    nama: kaiValueFor(table.headers, account.values, "nama"),
+    email: kaiValueFor(table.headers, account.values, "email"),
+    divisi: kaiValueFor(table.headers, account.values, "divisi"),
+    role: kaiValueFor(table.headers, account.values, "role").toLowerCase() === "admin"
       ? "admin"
       : "user",
     mustChangePassword:
-      valueFor(table.headers, account.values, "mustChangePassword").toLowerCase() === "true",
+      kaiValueFor(table.headers, account.values, "mustChangePassword").toLowerCase() === "true",
     sessionVersion:
-      Number(valueFor(table.headers, account.values, "sessionVersion")) || 0
+      Number(kaiValueFor(table.headers, account.values, "sessionVersion")) || 0
   };
 
-  if (String(valueFor(table.headers, account.values, "passwordHash")).indexOf("sha256$") !== 0) {
-    const index = fieldIndex(table.headers, "passwordHash");
-    const displayIndex = fieldIndex(table.headers, "password");
-    account.values[index] = passwordHash(password, Utilities.getUuid());
-    account.values[displayIndex] = MASKED_PASSWORD;
-    writeRow(table, account.rowNumber, account.values);
+  if (String(kaiValueFor(table.headers, account.values, "passwordHash")).indexOf("sha256$") !== 0) {
+    const index = kaiFieldIndex(table.headers, "passwordHash");
+    const displayIndex = kaiFieldIndex(table.headers, "password");
+    account.values[index] = kaiPasswordHash(password, Utilities.getUuid());
+    account.values[displayIndex] = KAI_MASKED_PASSWORD;
+    kaiWriteRow(table, account.rowNumber, account.values);
   }
 
   return {
     status: true,
     message: "Login berhasil.",
     user: user,
-    sessionToken: signSession(user),
+    sessionToken: kaiSignSession(user),
     mustChangePassword: user.mustChangePassword
   };
 }
 
-function register(body) {
+function kaiRegister(body) {
   const nim = String(body.nim || "").trim();
   const nama = String(body.nama || "").trim();
   const password = String(body.password || "");
   if (!nim || !nama || !password) {
-    throw apiError("NIM, nama, dan password wajib diisi.");
+    throw kaiApiError("NIM, nama, dan password wajib diisi.");
   }
-  if (nim === setting("ADMIN_NIM")) {
-    throw apiError("NIM sudah terdaftar");
+  if (nim === kaiSetting("ADMIN_NIM")) {
+    throw kaiApiError("NIM sudah terdaftar");
   }
 
-  const table = readTable("users");
-  if (findRow(table, function (row) {
-    return valueFor(table.headers, row.values, "nim") === nim;
+  const table = kaiReadTable("users");
+  if (kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === nim;
   })) {
-    throw apiError("NIM sudah terdaftar");
+    throw kaiApiError("NIM sudah terdaftar");
   }
 
-  appendRow(table, rowFor(table.headers, {
+  kaiAppendRow(table, kaiRowFor(table.headers, {
     nim: nim,
     nama: nama,
     email: String(body.email || "").trim(),
     divisi: String(body.divisi || "").trim(),
-    password: MASKED_PASSWORD,
-    passwordHash: passwordHash(password, Utilities.getUuid()),
+    password: KAI_MASKED_PASSWORD,
+    passwordHash: kaiPasswordHash(password, Utilities.getUuid()),
     tanggalDaftar: Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss"),
     mustChangePassword: false,
     sessionVersion: 0,
@@ -429,80 +430,80 @@ function register(body) {
   return { status: true, message: "Pendaftaran berhasil." };
 }
 
-function requireAdmin(body) {
-  const session = verifySession(body.sessionToken);
+function kaiRequireAdmin(body) {
+  const session = kaiVerifySession(body.sessionToken);
   if (session.role !== "admin") {
-    throw apiError("Akses admin diperlukan.");
+    throw kaiApiError("Akses admin diperlukan.");
   }
   return session;
 }
 
-function listUsers(body) {
-  requireAdmin(body);
-  const table = readTable("users");
+function kaiListUsers(body) {
+  kaiRequireAdmin(body);
+  const table = kaiReadTable("users");
   const users = table.rows.map(function (row) {
     return {
-      nim: valueFor(table.headers, row.values, "nim"),
-      nama: valueFor(table.headers, row.values, "nama"),
-      email: valueFor(table.headers, row.values, "email"),
-      divisi: valueFor(table.headers, row.values, "divisi"),
-      tanggalDaftar: valueFor(table.headers, row.values, "tanggalDaftar"),
-      password: MASKED_PASSWORD,
-      role: valueFor(table.headers, row.values, "role") || "user"
+      nim: kaiValueFor(table.headers, row.values, "nim"),
+      nama: kaiValueFor(table.headers, row.values, "nama"),
+      email: kaiValueFor(table.headers, row.values, "email"),
+      divisi: kaiValueFor(table.headers, row.values, "divisi"),
+      tanggalDaftar: kaiValueFor(table.headers, row.values, "tanggalDaftar"),
+      password: KAI_MASKED_PASSWORD,
+      role: kaiValueFor(table.headers, row.values, "role") || "user"
     };
   }).filter(function (user) {
     return user.nim &&
-      user.nim !== setting("ADMIN_NIM") &&
+      user.nim !== kaiSetting("ADMIN_NIM") &&
       user.role.toLowerCase() !== "admin";
   });
   return { status: true, users: users };
 }
 
-function assertCurrentUserSession(session) {
-  const table = readTable("users");
-  const account = findRow(table, function (row) {
-    return valueFor(table.headers, row.values, "nim") === session.nim;
+function kaiAssertCurrentUserSession(session) {
+  const table = kaiReadTable("users");
+  const account = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === session.nim;
   });
   if (
     !account ||
-    (Number(valueFor(table.headers, account.values, "sessionVersion")) || 0) !==
+    (Number(kaiValueFor(table.headers, account.values, "sessionVersion")) || 0) !==
       Number(session.sessionVersion || 0)
   ) {
-    throw apiError("Sandi akun telah diubah. Silakan login kembali.");
+    throw kaiApiError("Sandi akun telah diubah. Silakan login kembali.");
   }
   return account;
 }
 
-function resetUserPassword(body) {
-  requireAdmin(body);
+function kaiResetUserPassword(body) {
+  kaiRequireAdmin(body);
   const nim = String(body.nim || "").trim();
-  if (!nim || nim === setting("ADMIN_NIM")) {
-    throw apiError("Akun yang dipilih tidak valid.");
+  if (!nim || nim === kaiSetting("ADMIN_NIM")) {
+    throw kaiApiError("Akun yang dipilih tidak valid.");
   }
 
-  const table = readTable("users");
-  const account = findRow(table, function (row) {
-    return valueFor(table.headers, row.values, "nim") === nim;
+  const table = kaiReadTable("users");
+  const account = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === nim;
   });
   if (!account) {
-    throw apiError("Akun user tidak ditemukan.");
+    throw kaiApiError("Akun user tidak ditemukan.");
   }
-  if (valueFor(table.headers, account.values, "role").toLowerCase() === "admin") {
-    throw apiError("Reset sandi hanya tersedia untuk akun user.");
+  if (kaiValueFor(table.headers, account.values, "role").toLowerCase() === "admin") {
+    throw kaiApiError("Reset sandi hanya tersedia untuk akun user.");
   }
 
   const temporaryPassword = (
     Utilities.getUuid().replace(/-/g, "") +
     Utilities.getUuid().replace(/-/g, "")
   ).slice(0, 20).toUpperCase();
-  account.values[fieldIndex(table.headers, "password")] = MASKED_PASSWORD;
-  account.values[fieldIndex(table.headers, "passwordHash")] =
-    passwordHash(temporaryPassword, Utilities.getUuid());
-  account.values[fieldIndex(table.headers, "mustChangePassword")] = true;
-  const versionIndex = fieldIndex(table.headers, "sessionVersion");
+  account.values[kaiFieldIndex(table.headers, "password")] = KAI_MASKED_PASSWORD;
+  account.values[kaiFieldIndex(table.headers, "passwordHash")] =
+    kaiPasswordHash(temporaryPassword, Utilities.getUuid());
+  account.values[kaiFieldIndex(table.headers, "mustChangePassword")] = true;
+  const versionIndex = kaiFieldIndex(table.headers, "sessionVersion");
   account.values[versionIndex] =
     (Number(account.values[versionIndex]) || 0) + 1;
-  writeRow(table, account.rowNumber, account.values);
+  kaiWriteRow(table, account.rowNumber, account.values);
 
   return {
     status: true,
@@ -511,34 +512,34 @@ function resetUserPassword(body) {
   };
 }
 
-function changeTemporaryPassword(body) {
-  const session = verifySession(body.sessionToken);
+function kaiChangeTemporaryPassword(body) {
+  const session = kaiVerifySession(body.sessionToken);
   if (!session.mustChangePassword || session.role !== "user") {
-    throw apiError("Akun ini tidak sedang diwajibkan mengganti sandi.");
+    throw kaiApiError("Akun ini tidak sedang diwajibkan mengganti sandi.");
   }
-  assertCurrentUserSession(session);
+  kaiAssertCurrentUserSession(session);
 
   const newPassword = String(body.newPassword || "");
   if (newPassword.length < 8) {
-    throw apiError("Sandi baru minimal 8 karakter.");
+    throw kaiApiError("Sandi baru minimal 8 karakter.");
   }
 
-  const table = readTable("users");
-  const account = findRow(table, function (row) {
-    return valueFor(table.headers, row.values, "nim") === session.nim;
+  const table = kaiReadTable("users");
+  const account = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === session.nim;
   });
   if (!account) {
-    throw apiError("Akun user tidak ditemukan.");
+    throw kaiApiError("Akun user tidak ditemukan.");
   }
 
-  account.values[fieldIndex(table.headers, "password")] = MASKED_PASSWORD;
-  account.values[fieldIndex(table.headers, "passwordHash")] =
-    passwordHash(newPassword, Utilities.getUuid());
-  account.values[fieldIndex(table.headers, "mustChangePassword")] = false;
-  const versionIndex = fieldIndex(table.headers, "sessionVersion");
+  account.values[kaiFieldIndex(table.headers, "password")] = KAI_MASKED_PASSWORD;
+  account.values[kaiFieldIndex(table.headers, "passwordHash")] =
+    kaiPasswordHash(newPassword, Utilities.getUuid());
+  account.values[kaiFieldIndex(table.headers, "mustChangePassword")] = false;
+  const versionIndex = kaiFieldIndex(table.headers, "sessionVersion");
   account.values[versionIndex] =
     (Number(account.values[versionIndex]) || 0) + 1;
-  writeRow(table, account.rowNumber, account.values);
+  kaiWriteRow(table, account.rowNumber, account.values);
 
   const user = {
     nim: session.nim,
@@ -551,16 +552,16 @@ function changeTemporaryPassword(body) {
     status: true,
     message: "Sandi berhasil diganti.",
     user: user,
-    sessionToken: signSession(user)
+    sessionToken: kaiSignSession(user)
   };
 }
 
-function currentQr(body) {
-  requireAdmin(body);
+function kaiCurrentQr(body) {
+  kaiRequireAdmin(body);
   const offset = 7 * 60 * 60 * 1000;
   const slotMs = 12 * 60 * 60 * 1000;
   const slot = Math.floor((Date.now() + offset) / slotMs);
-  const token = digestHex(setting("QR_SECRET") + ":" + slot).slice(0, 16);
+  const token = kaiDigestHex(kaiSetting("QR_SECRET") + ":" + slot).slice(0, 16);
   return {
     status: true,
     qr: {
@@ -572,7 +573,7 @@ function currentQr(body) {
   };
 }
 
-function isValidQr(value) {
+function kaiIsValidQr(value) {
   const match = /^KAI-ABSEN\|(\d+)\|([0-9a-f]{16})$/.exec(
     String(value || "").trim()
   );
@@ -581,105 +582,105 @@ function isValidQr(value) {
   }
   const slotMs = 12 * 60 * 60 * 1000;
   const slot = Math.floor((Date.now() + 7 * 60 * 60 * 1000) / slotMs);
-  const expected = digestHex(setting("QR_SECRET") + ":" + slot).slice(0, 16);
+  const expected = kaiDigestHex(kaiSetting("QR_SECRET") + ":" + slot).slice(0, 16);
   return Number(match[1]) === slot && match[2] === expected;
 }
 
-function wibDate() {
+function kaiWibDate() {
   return Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd");
 }
 
-function wibTime() {
+function kaiWibTime() {
   return Utilities.formatDate(new Date(), "Asia/Jakarta", "HH:mm:ss");
 }
 
-function updateAttendance(body, action) {
-  const session = verifySession(body.sessionToken);
+function kaiUpdateAttendance(body, action) {
+  const session = kaiVerifySession(body.sessionToken);
   if (session.role !== "user") {
-    throw apiError("Hanya akun user yang dapat melakukan absensi.");
+    throw kaiApiError("Hanya akun user yang dapat melakukan absensi.");
   }
   if (session.mustChangePassword) {
-    throw apiError("Ganti sandi sementara sebelum menggunakan absensi.");
+    throw kaiApiError("Ganti sandi sementara sebelum menggunakan absensi.");
   }
-  assertCurrentUserSession(session);
-  if (!isValidQr(body.qr)) {
-    throw apiError("QR Code tidak valid atau sudah kedaluwarsa.");
+  kaiAssertCurrentUserSession(session);
+  if (!kaiIsValidQr(body.qr)) {
+    throw kaiApiError("QR Code tidak valid atau sudah kedaluwarsa.");
   }
 
-  const table = readTable("attendance");
-  const today = wibDate();
-  const attendance = findRow(table, function (row) {
-    return valueFor(table.headers, row.values, "nim") === session.nim &&
-      valueFor(table.headers, row.values, "tanggal").slice(0, 10) === today;
+  const table = kaiReadTable("attendance");
+  const today = kaiWibDate();
+  const attendance = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === session.nim &&
+      kaiValueFor(table.headers, row.values, "tanggal").slice(0, 10) === today;
   });
 
   if (action === "absen_masuk") {
-    if (attendance && valueFor(table.headers, attendance.values, "jamMasuk")) {
-      throw apiError("Anda sudah absen masuk hari ini.");
+    if (attendance && kaiValueFor(table.headers, attendance.values, "jamMasuk")) {
+      throw kaiApiError("Anda sudah absen masuk hari ini.");
     }
     const values = attendance
       ? attendance.values
-      : rowFor(table.headers, { nim: session.nim, nama: session.nama });
-    const updates = rowFor(table.headers, {
+      : kaiRowFor(table.headers, { nim: session.nim, nama: session.nama });
+    const updates = kaiRowFor(table.headers, {
       nim: session.nim,
       nama: session.nama,
       tanggal: today,
-      jamMasuk: wibTime(),
+      jamMasuk: kaiWibTime(),
       status: "Hadir"
     });
     updates.forEach(function (value, index) {
       if (value !== "") values[index] = value;
     });
     if (attendance) {
-      writeRow(table, attendance.rowNumber, values);
+      kaiWriteRow(table, attendance.rowNumber, values);
     } else {
-      appendRow(table, values);
+      kaiAppendRow(table, values);
     }
     return { status: true, message: "Absen masuk berhasil." };
   }
 
-  if (!attendance || !valueFor(table.headers, attendance.values, "jamMasuk")) {
-    throw apiError("Data absen masuk hari ini tidak ditemukan.");
+  if (!attendance || !kaiValueFor(table.headers, attendance.values, "jamMasuk")) {
+    throw kaiApiError("Data absen masuk hari ini tidak ditemukan.");
   }
-  if (valueFor(table.headers, attendance.values, "jamPulang")) {
-    throw apiError("Anda sudah absen pulang hari ini.");
+  if (kaiValueFor(table.headers, attendance.values, "jamPulang")) {
+    throw kaiApiError("Anda sudah absen pulang hari ini.");
   }
   const values = attendance.values;
-  const updates = rowFor(table.headers, {
+  const updates = kaiRowFor(table.headers, {
     nim: session.nim,
     nama: session.nama,
     tanggal: today,
-    jamPulang: wibTime(),
+    jamPulang: kaiWibTime(),
     status: "Hadir"
   });
   updates.forEach(function (value, index) {
     if (value !== "") values[index] = value;
   });
-  writeRow(table, attendance.rowNumber, values);
+  kaiWriteRow(table, attendance.rowNumber, values);
   return { status: true, message: "Absen pulang berhasil." };
 }
 
-function getHistory(body, allUsers) {
-  const session = verifySession(body.sessionToken);
+function kaiGetHistory(body, allUsers) {
+  const session = kaiVerifySession(body.sessionToken);
   if (session.mustChangePassword) {
-    throw apiError("Ganti sandi sementara sebelum membuka riwayat.");
+    throw kaiApiError("Ganti sandi sementara sebelum membuka riwayat.");
   }
   if (session.role === "user") {
-    assertCurrentUserSession(session);
+    kaiAssertCurrentUserSession(session);
   }
   if (allUsers && session.role !== "admin") {
-    throw apiError("Akses admin diperlukan.");
+    throw kaiApiError("Akses admin diperlukan.");
   }
 
-  const table = readTable("attendance");
+  const table = kaiReadTable("attendance");
   const history = table.rows.map(function (row) {
     return {
-      nim: valueFor(table.headers, row.values, "nim"),
-      nama: valueFor(table.headers, row.values, "nama"),
-      tanggal: valueFor(table.headers, row.values, "tanggal"),
-      jamMasuk: valueFor(table.headers, row.values, "jamMasuk"),
-      jamPulang: valueFor(table.headers, row.values, "jamPulang"),
-      status: valueFor(table.headers, row.values, "status")
+      nim: kaiValueFor(table.headers, row.values, "nim"),
+      nama: kaiValueFor(table.headers, row.values, "nama"),
+      tanggal: kaiValueFor(table.headers, row.values, "tanggal"),
+      jamMasuk: kaiValueFor(table.headers, row.values, "jamMasuk"),
+      jamPulang: kaiValueFor(table.headers, row.values, "jamPulang"),
+      status: kaiValueFor(table.headers, row.values, "status")
     };
   }).filter(function (record) {
     return record.nim && (allUsers || record.nim === session.nim);
