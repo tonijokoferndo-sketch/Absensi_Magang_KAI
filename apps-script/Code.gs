@@ -20,7 +20,7 @@ const DEFAULT_HEADERS = {
   attendance: ["NIM", "Nama", "Tanggal", "Jam Masuk", "Jam Pulang", "Status"]
 };
 
-const MASKED_PASSWORD = "••••••••";
+const MASKED_PASSWORD = "****";
 
 function doPost(event) {
   try {
@@ -193,7 +193,7 @@ function migrateAndFormatUsers(sheet, headers, rows) {
     const storedHash = String(row.values[hashIndex] || "");
     let changed = false;
 
-    if (displayedPassword && displayedPassword !== MASKED_PASSWORD) {
+    if (displayedPassword && !isMaskedPassword(displayedPassword)) {
       if (!storedHash) {
         row.values[hashIndex] = isPasswordHash(displayedPassword)
           ? displayedPassword
@@ -201,7 +201,10 @@ function migrateAndFormatUsers(sheet, headers, rows) {
       }
       row.values[passwordIndex] = MASKED_PASSWORD;
       changed = true;
-    } else if (storedHash && !displayedPassword) {
+    } else if (
+      displayedPassword !== MASKED_PASSWORD &&
+      (storedHash || isMaskedPassword(displayedPassword))
+    ) {
       row.values[passwordIndex] = MASKED_PASSWORD;
       changed = true;
     }
@@ -274,6 +277,12 @@ function passwordHash(password, salt) {
 
 function isPasswordHash(value) {
   return /^sha256\$[^$]+\$[0-9a-f]{64}$/i.test(String(value || ""));
+}
+
+function isMaskedPassword(value) {
+  return ["****", "********", "••••••••"].indexOf(
+    String(value || "")
+  ) !== -1;
 }
 
 function verifyPassword(password, stored) {
@@ -438,6 +447,7 @@ function listUsers(body) {
       email: valueFor(table.headers, row.values, "email"),
       divisi: valueFor(table.headers, row.values, "divisi"),
       tanggalDaftar: valueFor(table.headers, row.values, "tanggalDaftar"),
+      password: MASKED_PASSWORD,
       role: valueFor(table.headers, row.values, "role") || "user"
     };
   }).filter(function (user) {

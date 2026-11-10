@@ -1635,7 +1635,8 @@ if (btnBukaKamera) {
                     <td>${this.escape(user.nama)}</td>
                     <td>${this.escape(user.email || "-")}</td>
                     <td>${this.escape(user.divisi || "-")}</td>
-                    <td>${this.escape(user.tanggalDaftar || "-")}</td>
+                    <td>${this.escape(user.password || "****")}</td>
+                    <td>${this.escape(user.tanggalDaftar || "Belum tercatat")}</td>
                     <td>
                         <button
                             class="btn-secondary admin-reset-password"
@@ -1655,6 +1656,7 @@ if (btnBukaKamera) {
                                 <th>Nama</th>
                                 <th>Email</th>
                                 <th>Divisi</th>
+                                <th>Password</th>
                                 <th>Tanggal Daftar</th>
                                 <th>Aksi</th>
                             </tr>
