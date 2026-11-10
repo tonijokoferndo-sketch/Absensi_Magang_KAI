@@ -259,7 +259,7 @@ function kaiWriteRow(table, rowNumber, values) {
 }
 
 function kaiAppendRow(table, values) {
-  table.sheet.kaiAppendRow(values);
+  table.sheet.appendRow(values);
 }
 
 function kaiDigestHex(text) {
