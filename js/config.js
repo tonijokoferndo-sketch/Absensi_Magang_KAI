@@ -12,11 +12,11 @@ const CONFIG = {
 
 
     // =========================================
-    // GOOGLE APPS SCRIPT API
+    // google script api url
     // =========================================
 
     API_URL:
-"https://script.google.com/macros/s/AKfycby_KKfyfXYPfGm7DGSEHdPh-bw4siIw9K0ug3Jmu1qhCk-v52U9jtKq6iwkqIVScV3S/exec",
+"https://script.google.com/macros/s/AKfycbxOPCP78h-7wbXbsPo4axMfGbuX3LjSFwXz0PPgsVhfJr6oUgXIVdIaN-TJcMroVnEo/exec",
 
 
     // =========================================

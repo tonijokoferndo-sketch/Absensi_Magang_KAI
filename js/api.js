@@ -10,9 +10,28 @@ async function apiRequest(action, data = {}) {
     };
 
 
+    const safePayload = {
+        ...payload
+    };
+
+    if ("qr" in safePayload) {
+
+        safePayload.qr =
+            "[REDACTED]";
+
+    }
+
+    if ("password" in safePayload) {
+
+        safePayload.password =
+            "[REDACTED]";
+
+    }
+
+
     console.log(
         "[API] REQUEST:",
-        payload
+        safePayload
     );
 
 
@@ -55,12 +74,6 @@ async function apiRequest(action, data = {}) {
         );
 
 
-        console.log(
-            "[API] RESPONSE:",
-            text
-        );
-
-
         if (!response.ok) {
 
             return {
@@ -70,10 +83,7 @@ async function apiRequest(action, data = {}) {
 
                 message:
                     "HTTP Error " +
-                    response.status,
-
-                raw:
-                    text
+                    response.status
 
             };
 
@@ -97,8 +107,7 @@ async function apiRequest(action, data = {}) {
         } catch (error) {
 
             console.error(
-                "[API] Response bukan JSON:",
-                text
+                "[API] Response bukan JSON."
             );
 
 
@@ -108,10 +117,7 @@ async function apiRequest(action, data = {}) {
                     false,
 
                 message:
-                    "Server tidak mengirim response JSON.",
-
-                raw:
-                    text
+                    "Server tidak mengirim response JSON."
 
             };
 

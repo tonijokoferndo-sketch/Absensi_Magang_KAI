@@ -1,5 +1,335 @@
+const QR_SLOT_MS =
+    12 * 60 * 60 * 1000;
+
+const QR_WIB_OFFSET =
+    7 * 60 * 60 * 1000;
+
+// SECRET QR: ganti sesuai kebutuhan, jangan dibagikan.
+const QR_SECRET =
+    "kai-absensi-qr-rotation-v1";
+
+
 const Dashboard = {
     scannedQR: "",
+    activeQrMode: "",
+    activeQrSlot: null,
+    qrClockTimer: null,
+    qrVisibilityHandler: null,
+
+    getSlot: function (now = Date.now()) {
+
+        return Math.floor(
+            (now + QR_WIB_OFFSET) /
+            QR_SLOT_MS
+        );
+
+    },
+
+
+    getTimeQrData: async function (now = Date.now()) {
+
+        if (
+            !window.crypto ||
+            !window.crypto.subtle
+        ) {
+
+            throw new Error(
+                "Peramban tidak mendukung verifikasi QR yang aman."
+            );
+
+        }
+
+
+        const slot =
+            this.getSlot(now);
+
+        const encodedSecret =
+            new TextEncoder().encode(
+                `${QR_SECRET}:${slot}`
+            );
+
+        const digest =
+            await window.crypto.subtle.digest(
+                "SHA-256",
+                encodedSecret
+            );
+
+        const token =
+            Array.from(
+                new Uint8Array(digest),
+                byte => byte.toString(16).padStart(2, "0")
+            )
+                .join("")
+                .slice(0, 16);
+
+
+        return {
+            slot: slot,
+            token: token,
+            payload: `KAI-ABSEN|${slot}|${token}`,
+            expiresAt:
+                (slot + 1) * QR_SLOT_MS -
+                QR_WIB_OFFSET
+        };
+
+    },
+
+
+    isCurrentTimeQr: async function (value) {
+
+        const match =
+            /^KAI-ABSEN\|(\d+)\|([0-9a-f]{16})$/
+                .exec(
+                    String(value || "").trim()
+                );
+
+
+        if (!match) {
+
+            return false;
+
+        }
+
+
+        const current =
+            await this.getTimeQrData();
+
+
+        return (
+            match[1] === String(current.slot) &&
+            match[2] === current.token
+        );
+
+    },
+
+
+    ensureScannedQrIsCurrent: async function (message) {
+
+        try {
+
+            if (
+                await this.isCurrentTimeQr(
+                    this.scannedQR
+                )
+            ) {
+
+                return true;
+
+            }
+
+
+            this.scannedQR = "";
+
+            if (message) {
+
+                message.textContent =
+                    "QR Code sudah kedaluwarsa, minta QR terbaru ke admin";
+
+                message.classList.remove("success");
+                message.classList.add("error");
+
+            }
+
+
+            Scanner.reset();
+            return false;
+
+        } catch (error) {
+
+            if (message) {
+
+                message.textContent =
+                    error.message ||
+                    "QR Code tidak dapat diverifikasi.";
+
+                message.classList.remove("success");
+                message.classList.add("error");
+
+            }
+
+
+            console.error(
+                "QR VERIFICATION ERROR:",
+                error.message
+            );
+
+            return false;
+
+        }
+
+    },
+
+
+    formatWibDateTime: function (timestamp) {
+
+        return new Intl.DateTimeFormat(
+            "id-ID",
+            {
+                timeZone: "Asia/Jakarta",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hourCycle: "h23"
+            }
+        ).format(
+            new Date(timestamp)
+        );
+
+    },
+
+
+    formatQrCountdown: function (expiresAt, now = Date.now()) {
+
+        const totalSeconds =
+            Math.max(
+                0,
+                Math.floor(
+                    (expiresAt - now) / 1000
+                )
+            );
+
+        const hours =
+            Math.floor(totalSeconds / 3600);
+
+        const minutes =
+            Math.floor((totalSeconds % 3600) / 60);
+
+        const seconds =
+            totalSeconds % 60;
+
+
+        return [
+            hours,
+            minutes,
+            seconds
+        ]
+            .map(value => String(value).padStart(2, "0"))
+            .join(":");
+
+    },
+
+
+    startAdminQrClock: function () {
+
+        if (this.qrClockTimer) {
+
+            clearInterval(this.qrClockTimer);
+
+        }
+
+
+        if (this.qrVisibilityHandler) {
+
+            document.removeEventListener(
+                "visibilitychange",
+                this.qrVisibilityHandler
+            );
+
+        }
+
+
+        this.qrVisibilityHandler =
+            () => {
+
+                if (
+                    !document.hidden &&
+                    this.activeQrMode
+                ) {
+
+                    this.updateAdminQrClock();
+
+                }
+
+            };
+
+
+        document.addEventListener(
+            "visibilitychange",
+            this.qrVisibilityHandler
+        );
+
+
+        this.qrClockTimer =
+            setInterval(
+                () => this.updateAdminQrClock(),
+                1000
+            );
+
+    },
+
+
+    updateAdminQrClock: async function () {
+
+        if (!this.activeQrMode) {
+
+            return;
+
+        }
+
+
+        const now =
+            Date.now();
+
+        const currentSlot =
+            this.getSlot(now);
+
+
+        if (this.activeQrSlot !== currentSlot) {
+
+            await this.generateAdminQrCodes(
+                this.activeQrMode
+            );
+
+            return;
+
+        }
+
+
+        const qrCardId =
+            this.activeQrMode === "PULANG" ?
+                "adminQrCardPulang" :
+                "adminQrCardMasuk";
+
+        const qrCard =
+            document.getElementById(qrCardId);
+
+        if (!qrCard) {
+
+            return;
+
+        }
+
+
+        const validity =
+            qrCard.querySelector(".qr-validity");
+
+        const countdown =
+            qrCard.querySelector(".qr-countdown");
+
+        const expiresAt =
+            (currentSlot + 1) * QR_SLOT_MS -
+            QR_WIB_OFFSET;
+
+
+        if (validity) {
+
+            validity.textContent =
+                this.formatWibDateTime(expiresAt);
+
+        }
+
+
+        if (countdown) {
+
+            countdown.textContent =
+                this.formatQrCountdown(expiresAt, now);
+
+        }
+
+    },
 
     // =========================================
     // SHOW DASHBOARD
@@ -440,6 +770,17 @@ if (btnBukaKamera) {
     }
 
 
+    if (
+        !await this.ensureScannedQrIsCurrent(
+            message
+        )
+    ) {
+
+        return;
+
+    }
+
+
     if (message) {
 
         message.textContent =
@@ -460,18 +801,13 @@ if (btnBukaKamera) {
                     nim:
                         user.nim,
 
+                    // Pertahankan format QR API lama setelah token lolos validasi lokal.
                     qr:
-                        this.scannedQR
+                        `${CONFIG.QR_CODE}|MASUK`
 
                 }
 
             );
-
-
-        console.log(
-            "HASIL ABSEN MASUK:",
-            result
-        );
 
 
         if (message) {
@@ -563,6 +899,17 @@ if (btnBukaKamera) {
     }
 
 
+    if (
+        !await this.ensureScannedQrIsCurrent(
+            message
+        )
+    ) {
+
+        return;
+
+    }
+
+
     if (message) {
 
         message.textContent =
@@ -583,18 +930,13 @@ if (btnBukaKamera) {
                     nim:
                         user.nim,
 
+                    // Pertahankan format QR API lama setelah token lolos validasi lokal.
                     qr:
-                        this.scannedQR
+                        `${CONFIG.QR_CODE}|PULANG`
 
                 }
 
             );
-
-
-        console.log(
-            "HASIL ABSEN PULANG:",
-            result
-        );
 
 
         if (message) {
@@ -958,6 +1300,16 @@ if (btnBukaKamera) {
                             Scan untuk absen masuk.
                         </p>
 
+                        <p>
+                            Berlaku sampai:
+                            <span class="qr-validity"></span> WIB
+                        </p>
+
+                        <p>
+                            Berganti dalam:
+                            <span class="qr-countdown"></span>
+                        </p>
+
                     </div>
 
 
@@ -977,6 +1329,16 @@ if (btnBukaKamera) {
 
                         <p>
                             Scan untuk absen pulang.
+                        </p>
+
+                        <p>
+                            Berlaku sampai:
+                            <span class="qr-validity"></span> WIB
+                        </p>
+
+                        <p>
+                            Berganti dalam:
+                            <span class="qr-countdown"></span>
                         </p>
 
                     </div>
@@ -1082,6 +1444,14 @@ if (btnBukaKamera) {
         }
 
 
+        this.startAdminQrClock();
+
+
+        await this.generateAdminQrCodes(
+            "MASUK"
+        );
+
+
         await this.loadAdminHistory(
             admin
         );
@@ -1092,20 +1462,6 @@ if (btnBukaKamera) {
     // =========================================
     // QR ADMIN
     // =========================================
-
-    normalizeQrValue: function (value) {
-
-        return String(
-            value || ""
-        )
-            .trim()
-            .replace(
-                /\|(MASUK|PULANG)$/i,
-                ""
-            );
-
-    },
-
 
     generateAdminQrCodes: async function (mode = "MASUK") {
 
@@ -1122,13 +1478,8 @@ if (btnBukaKamera) {
 
         }
 
-        const baseQr =
-            this.normalizeQrValue(
-                CONFIG.QR_CODE
-            );
-
-        const qrCode =
-            `${baseQr}|${mode}`;
+        this.activeQrMode =
+            mode;
 
         const qrCardId =
             mode === "PULANG" ?
@@ -1184,12 +1535,16 @@ if (btnBukaKamera) {
 
         try {
 
+            const qrData =
+                await this.getTimeQrData();
+
+
             qrBox.innerHTML = "";
 
             new QRCode(
                 qrBox,
                 {
-                    text: qrCode,
+                    text: qrData.payload,
                     width: 220,
                     height: 220,
                     colorDark:
@@ -1202,11 +1557,57 @@ if (btnBukaKamera) {
                 }
             );
 
+            this.activeQrSlot =
+                qrData.slot;
+
+
+            const validity =
+                qrCard.querySelector(".qr-validity");
+
+            const countdown =
+                qrCard.querySelector(".qr-countdown");
+
+
+            if (validity) {
+
+                validity.textContent =
+                    this.formatWibDateTime(
+                        qrData.expiresAt
+                    );
+
+            }
+
+
+            if (countdown) {
+
+                countdown.textContent =
+                    this.formatQrCountdown(
+                        qrData.expiresAt
+                    );
+
+            }
+
         } catch (error) {
+
+            qrBox.innerHTML = "";
+            this.activeQrSlot = null;
+
+
+            const validity =
+                qrCard.querySelector(".qr-validity");
+
+            if (validity) {
+
+                validity.textContent =
+                    error.message ||
+                    "QR tidak dapat dibuat.";
+
+            }
+
 
             console.error(
                 "GENERATE QR ERROR:",
-                error
+                error.message
             );
 
         }
@@ -1477,12 +1878,6 @@ if (btnBukaKamera) {
 
             async (decodedText) => {
 
-                console.log(
-                    "QR TERBACA:",
-                    decodedText
-                );
-
-
                 // =====================================
                 // CEK QR
                 // =====================================
@@ -1492,57 +1887,35 @@ if (btnBukaKamera) {
                         decodedText || ""
                     ).trim();
 
-                const normalizedQr =
-                    this.normalizeQrValue(
-                        qr
-                    );
+                let isValidQr = false;
 
-                const expectedQr =
-                    this.normalizeQrValue(
-                        CONFIG.QR_CODE
-                    );
+                try {
 
-                const validQrValues = [
-                    expectedQr,
-                    `${expectedQr}|MASUK`,
-                    `${expectedQr}|PULANG`
-                ];
+                    isValidQr =
+                        await this.isCurrentTimeQr(qr);
 
+                } catch (error) {
 
-                if (
-                    typeof CONFIG.QR_CODE ===
-                    "undefined"
-                ) {
-
-                    console.error(
-                        "CONFIG.QR_CODE belum tersedia."
-                    );
-
+                    this.scannedQR = "";
 
                     if (scanResult) {
 
                         scanResult.textContent =
-                            "QR Code belum dikonfigurasi.";
+                            error.message ||
+                            "QR Code tidak dapat diverifikasi.";
+
+                        scanResult.classList.add("error");
 
                     }
 
+
+                    Scanner.reset();
                     return;
 
                 }
 
 
-                // =====================================
-                // QR TIDAK VALID
-                // =====================================
-
-                if (
-                    !validQrValues.includes(
-                        qr
-                    ) &&
-                    !validQrValues.includes(
-                        normalizedQr
-                    )
-                ) {
+                if (!isValidQr) {
 
                     this.scannedQR = "";
 
@@ -1550,7 +1923,10 @@ if (btnBukaKamera) {
                     if (scanResult) {
 
                         scanResult.textContent =
-                            "❌ QR Code tidak valid.";
+                            "QR Code sudah kedaluwarsa, minta QR terbaru ke admin";
+
+                        scanResult.classList.remove("success");
+                        scanResult.classList.add("error");
 
                     }
 
@@ -1576,13 +1952,9 @@ if (btnBukaKamera) {
                     scanResult.textContent =
                         "✅ QR Code valid. Silakan pilih Absen Masuk atau Absen Pulang.";
 
+                    scanResult.classList.remove("error");
+
                 }
-
-
-                console.log(
-                    "QR VALID:",
-                    this.scannedQR
-                );
 
 
                 // Jangan scan berulang

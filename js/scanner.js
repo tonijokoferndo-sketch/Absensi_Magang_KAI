@@ -178,12 +178,6 @@ const Scanner = {
                     decodedResult
                 ) => {
 
-                    console.log(
-                        "QR TERBACA:",
-                        decodedText
-                    );
-
-
                     // Hindari hasil sama
                     // berulang kali
 
