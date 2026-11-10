@@ -503,6 +503,39 @@ button {
 
 }
 
+.admin-navigation {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 0;
+    margin: 4px 0 16px;
+    background: #ffffff;
+}
+
+.admin-navigation a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: #ffffff;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.admin-navigation .btn-secondary {
+    background: #64748b;
+}
+
+.admin-user-management,
+.admin-attendance-section {
+    scroll-margin-top: 76px;
+}
+
 .admin-user-management .section-header > div {
     min-width: 0;
 }
@@ -516,6 +549,61 @@ button {
 
 .admin-user-management .admin-reset-password {
     white-space: nowrap;
+}
+
+.admin-user-management td input {
+    width: 100%;
+    min-width: 130px;
+    padding: 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font: inherit;
+}
+
+.admin-user-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-user-actions button {
+    white-space: nowrap;
+}
+
+.btn-danger {
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #b42318;
+    color: #ffffff;
+    font: inherit;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background: #8f1c13;
+}
+
+.admin-history-controls {
+    display: grid;
+    grid-template-columns: auto minmax(180px, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.admin-history-controls strong {
+    text-align: center;
+    color: #334155;
+}
+
+.admin-history-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.print-report-title {
+    display: none;
 }
 
 .password-change-card {
@@ -585,6 +673,65 @@ button {
 
     }
 
+    .admin-history-controls {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .admin-history-controls strong {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .admin-navigation {
+        top: 0;
+    }
+
+}
+
+@media print {
+    @page {
+        size: landscape;
+        margin: 12mm;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    #adminHistory,
+    #adminHistory * {
+        visibility: visible !important;
+    }
+
+    #adminHistory {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        color: #000000;
+    }
+
+    #adminHistory .print-report-title {
+        display: block;
+        margin-bottom: 12px;
+        font-size: 16pt;
+    }
+
+    #adminHistory .table-wrapper {
+        overflow: visible;
+    }
+
+    #adminHistory table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    #adminHistory th,
+    #adminHistory td {
+        border: 1px solid #333333;
+        padding: 6px;
+        color: #000000;
+        font-size: 9pt;
+    }
 }
 
 

@@ -7,6 +7,8 @@ const KAI_FIELD_ALIASES = {
   passwordHash: ["passwordhash", "hashpassword", "hashsandi"],
   mustChangePassword: ["wajibgantipassword", "wajibgantipass", "mustchangepassword", "resetpassword"],
   sessionVersion: ["sessionversion", "versisession", "versikredensial"],
+  qrMasukSlot: ["qrslotmasuk", "qrmasukslot", "slotqrmasuk"],
+  qrPulangSlot: ["qrslotpulang", "qrpulangslot", "slotqrpulang"],
   role: ["role", "peran", "jenisakun", "tipeakun"],
   tanggalDaftar: ["tanggaldaftar", "tanggalregistrasi", "tanggalregistrasiakun", "registrationdate", "registeredat", "createdat"],
   tanggal: ["tanggal", "date", "tanggalabsen", "timestamp", "waktu"],
@@ -17,7 +19,7 @@ const KAI_FIELD_ALIASES = {
 
 const KAI_DEFAULT_HEADERS = {
   users: ["NIM", "Nama", "Email", "Divisi", "Password", "Tanggal Daftar", "Role", "Password Hash", "Wajib Ganti Password", "Session Version"],
-  attendance: ["NIM", "Nama", "Tanggal", "Jam Masuk", "Jam Pulang", "Status"]
+  attendance: ["NIM", "Nama", "Tanggal", "Jam Masuk", "Jam Pulang", "Status", "QR Slot Masuk", "QR Slot Pulang"]
 };
 
 const KAI_MASKED_PASSWORD = "****";
@@ -39,7 +41,7 @@ function doGet() {
   return kaiJsonResponse({
     status: true,
     message: "Absensi Magang KAI API siap.",
-    version: "accounts-password-date-v2"
+    version: "admin-users-qr-print-v3"
   });
 }
 
@@ -75,6 +77,10 @@ function kaiRoute(body) {
       return kaiRegister(body);
     case "list_users":
       return kaiListUsers(body);
+    case "update_user":
+      return kaiUpdateUser(body);
+    case "delete_user":
+      return kaiDeleteUser(body);
     case "reset_password":
       return kaiResetUserPassword(body);
     case "change_password":
@@ -135,8 +141,8 @@ function kaiReadTable(key) {
 
   let headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0];
   const required = key === "users"
-    ? ["nim", "nama", "password", "passwordHash", "tanggalDaftar", "role", "mustChangePassword", "sessionVersion"]
-    : ["nim", "nama", "tanggal", "jamMasuk", "jamPulang", "status"];
+    ? ["nim", "nama", "email", "divisi", "password", "passwordHash", "tanggalDaftar", "role", "mustChangePassword", "sessionVersion"]
+    : ["nim", "nama", "tanggal", "jamMasuk", "jamPulang", "status", "qrMasukSlot", "qrPulangSlot"];
   let changed = false;
 
   required.forEach(function (field) {
@@ -145,6 +151,8 @@ function kaiReadTable(key) {
         ? {
           nim: 0,
           nama: 1,
+          email: 2,
+          divisi: 3,
           password: 4,
           tanggalDaftar: 5,
           role: 6,
@@ -152,7 +160,7 @@ function kaiReadTable(key) {
           mustChangePassword: 8,
           sessionVersion: 9
         }[field]
-        : ["nim", "nama", "tanggal", "jamMasuk", "jamPulang", "status"].indexOf(field);
+        : ["nim", "nama", "tanggal", "jamMasuk", "jamPulang", "status", "qrMasukSlot", "qrPulangSlot"].indexOf(field);
       headers.push(KAI_DEFAULT_HEADERS[key][defaultIndex]);
       changed = true;
     }
@@ -466,6 +474,57 @@ function kaiListUsers(body) {
   return { status: true, users: users };
 }
 
+function kaiUpdateUser(body) {
+  kaiRequireAdmin(body);
+  const nim = String(body.nim || "").trim();
+  const nama = String(body.nama || "").trim();
+  if (!nim || !nama || nim === kaiSetting("ADMIN_NIM")) {
+    throw kaiApiError("NIM dan nama user wajib diisi.");
+  }
+
+  const table = kaiReadTable("users");
+  const account = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === nim;
+  });
+  if (!account || kaiValueFor(table.headers, account.values, "role").toLowerCase() === "admin") {
+    throw kaiApiError("Akun user tidak ditemukan.");
+  }
+
+  account.values[kaiFieldIndex(table.headers, "nama")] = nama;
+  const emailIndex = kaiFieldIndex(table.headers, "email");
+  const divisiIndex = kaiFieldIndex(table.headers, "divisi");
+  if (emailIndex >= 0) {
+    account.values[emailIndex] = String(body.email || "").trim();
+  }
+  if (divisiIndex >= 0) {
+    account.values[divisiIndex] = String(body.divisi || "").trim();
+  }
+  kaiWriteRow(table, account.rowNumber, account.values);
+  return { status: true, message: "Data akun berhasil diperbarui." };
+}
+
+function kaiDeleteUser(body) {
+  kaiRequireAdmin(body);
+  const nim = String(body.nim || "").trim();
+  if (!nim || nim === kaiSetting("ADMIN_NIM")) {
+    throw kaiApiError("Akun yang dipilih tidak valid.");
+  }
+
+  const table = kaiReadTable("users");
+  const account = kaiFindRow(table, function (row) {
+    return kaiValueFor(table.headers, row.values, "nim") === nim;
+  });
+  if (!account || kaiValueFor(table.headers, account.values, "role").toLowerCase() === "admin") {
+    throw kaiApiError("Akun user tidak ditemukan.");
+  }
+
+  table.sheet.deleteRow(account.rowNumber);
+  return {
+    status: true,
+    message: "Akun berhasil dihapus. Riwayat absensi tetap disimpan."
+  };
+}
+
 function kaiAssertCurrentUserSession(session) {
   const table = kaiReadTable("users");
   const account = kaiFindRow(table, function (row) {
@@ -580,17 +639,19 @@ function kaiCurrentQr(body) {
   };
 }
 
-function kaiIsValidQr(value) {
+function kaiGetValidQrSlot(value) {
   const match = /^KAI-ABSEN\|(\d+)\|([0-9a-f]{16})$/.exec(
     String(value || "").trim()
   );
   if (!match) {
-    return false;
+    return null;
   }
   const slotMs = 12 * 60 * 60 * 1000;
   const slot = Math.floor((Date.now() + 7 * 60 * 60 * 1000) / slotMs);
   const expected = kaiDigestHex(kaiSetting("QR_SECRET") + ":" + slot).slice(0, 16);
-  return Number(match[1]) === slot && match[2] === expected;
+  return Number(match[1]) === slot && match[2] === expected
+    ? slot
+    : null;
 }
 
 function kaiWibDate() {
@@ -610,7 +671,8 @@ function kaiUpdateAttendance(body, action) {
     throw kaiApiError("Ganti sandi sementara sebelum menggunakan absensi.");
   }
   kaiAssertCurrentUserSession(session);
-  if (!kaiIsValidQr(body.qr)) {
+  const qrSlot = kaiGetValidQrSlot(body.qr);
+  if (qrSlot === null) {
     throw kaiApiError("QR Code tidak valid atau sudah kedaluwarsa.");
   }
 
@@ -633,6 +695,7 @@ function kaiUpdateAttendance(body, action) {
       nama: session.nama,
       tanggal: today,
       jamMasuk: kaiWibTime(),
+      qrMasukSlot: qrSlot,
       status: "Hadir"
     });
     updates.forEach(function (value, index) {
@@ -658,6 +721,7 @@ function kaiUpdateAttendance(body, action) {
     nama: session.nama,
     tanggal: today,
     jamPulang: kaiWibTime(),
+    qrPulangSlot: qrSlot,
     status: "Hadir"
   });
   updates.forEach(function (value, index) {
@@ -687,6 +751,8 @@ function kaiGetHistory(body, allUsers) {
       tanggal: kaiValueFor(table.headers, row.values, "tanggal"),
       jamMasuk: kaiValueFor(table.headers, row.values, "jamMasuk"),
       jamPulang: kaiValueFor(table.headers, row.values, "jamPulang"),
+      qrMasukSlot: kaiValueFor(table.headers, row.values, "qrMasukSlot"),
+      qrPulangSlot: kaiValueFor(table.headers, row.values, "qrPulangSlot"),
       status: kaiValueFor(table.headers, row.values, "status")
     };
   }).filter(function (record) {

@@ -10,6 +10,9 @@ const Dashboard = {
     activeQrSlot: null,
     qrClockTimer: null,
     qrVisibilityHandler: null,
+    adminHistoryData: [],
+    adminQrSlots: [],
+    adminQrSlotIndex: -1,
 
     getSlot: function (now = Date.now()) {
 
@@ -1308,12 +1311,16 @@ if (btnBukaKamera) {
 
                 </div>
 
+                <nav class="admin-navigation" aria-label="Navigasi dashboard admin">
+                    <a class="btn-primary" href="#adminUserManagement">Kelola Akun User</a>
+                    <a class="btn-secondary" href="#adminAttendance">Data Absensi</a>
+                </nav>
 
-                <section class="admin-user-management">
+                <section id="adminUserManagement" class="admin-user-management">
                     <div class="section-header">
                         <div>
                             <h3>Kelola Akun User</h3>
-                            <p>Reset akan membuat sandi sementara yang harus diganti saat user login berikutnya.</p>
+                            <p>Edit data akun, reset sandi, atau hapus akun. Riwayat absensi tetap disimpan jika akun dihapus.</p>
                         </div>
                         <button id="btnAdminUsersRefresh" class="btn-secondary" type="button">
                             Muat Ulang
@@ -1415,6 +1422,7 @@ if (btnBukaKamera) {
 
                 <!-- HEADER DATA -->
 
+                <section id="adminAttendance" class="admin-attendance-section">
                 <div class="section-header">
 
                     <h3>
@@ -1432,6 +1440,18 @@ if (btnBukaKamera) {
 
                 </div>
 
+                <div class="admin-history-controls">
+                    <button id="btnAdminQrPrev" class="btn-secondary" type="button" aria-label="Periode QR sebelumnya">
+                        Sebelumnya
+                    </button>
+                    <strong id="adminQrPeriodLabel">Memuat periode QR...</strong>
+                    <button id="btnAdminQrNext" class="btn-secondary" type="button" aria-label="Periode QR berikutnya">
+                        Berikutnya
+                    </button>
+                    <button id="btnAdminPrintHistory" class="btn-primary" type="button" disabled>
+                        Cetak Periode Ini
+                    </button>
+                </div>
 
                 <!-- DATA -->
 
@@ -1440,6 +1460,7 @@ if (btnBukaKamera) {
                     Memuat data...
 
                 </div>
+                </section>
 
             </div>
 
@@ -1467,6 +1488,35 @@ if (btnBukaKamera) {
 
         }
 
+        const previousQrPeriod =
+            document.getElementById("btnAdminQrPrev");
+        const nextQrPeriod =
+            document.getElementById("btnAdminQrNext");
+        const printHistory =
+            document.getElementById("btnAdminPrintHistory");
+
+        if (previousQrPeriod) {
+            previousQrPeriod.addEventListener("click", () => {
+                if (this.adminQrSlotIndex > 0) {
+                    this.adminQrSlotIndex -= 1;
+                    this.renderAdminHistoryPeriod();
+                }
+            });
+        }
+
+        if (nextQrPeriod) {
+            nextQrPeriod.addEventListener("click", () => {
+                if (this.adminQrSlotIndex < this.adminQrSlots.length - 1) {
+                    this.adminQrSlotIndex += 1;
+                    this.renderAdminHistoryPeriod();
+                }
+            });
+        }
+
+        if (printHistory) {
+            printHistory.addEventListener("click", () => window.print());
+        }
+
         const usersRefresh =
             document.getElementById("btnAdminUsersRefresh");
 
@@ -1482,30 +1532,77 @@ if (btnBukaKamera) {
 
         if (adminUsers) {
             adminUsers.addEventListener("click", async (event) => {
-                const button =
-                    event.target.closest("[data-reset-user]");
+                const button = event.target.closest(
+                    "[data-reset-user], [data-save-user], [data-delete-user]"
+                );
 
                 if (!button || button.disabled) {
                     return;
                 }
 
                 const nim =
-                    button.getAttribute("data-reset-user");
+                    button.dataset.resetUser ||
+                    button.dataset.saveUser ||
+                    button.dataset.deleteUser;
 
-                if (!window.confirm(
-                    `Buat sandi sementara baru untuk NIM ${nim}? Sandi lama tidak akan berlaku.`
-                )) {
-                    return;
-                }
-
-                button.disabled = true;
                 const resultContainer =
                     document.getElementById("adminResetResult");
-                resultContainer.textContent =
-                    "Membuat sandi sementara...";
                 resultContainer.classList.remove("error", "success");
+                button.disabled = true;
 
                 try {
+                    if (button.hasAttribute("data-save-user")) {
+                        const row = button.closest("tr");
+                        const emailField =
+                            row.querySelector('[data-user-field="email"]');
+                        if (!emailField.checkValidity()) {
+                            emailField.reportValidity();
+                            button.disabled = false;
+                            return;
+                        }
+                        const getField = (field) =>
+                            row.querySelector(`[data-user-field="${field}"]`).value.trim();
+                        const result = await apiRequest("update_user", {
+                            nim: nim,
+                            nama: getField("nama"),
+                            email: getField("email"),
+                            divisi: getField("divisi")
+                        });
+                        if (!result || !result.status) {
+                            throw new Error(result && result.message || "Perubahan akun gagal disimpan.");
+                        }
+                        resultContainer.textContent = result.message;
+                        resultContainer.classList.add("success");
+                        await this.loadAdminUsers();
+                        return;
+                    }
+
+                    if (button.hasAttribute("data-delete-user")) {
+                        if (!window.confirm(
+                            `Hapus akun NIM ${nim}? Riwayat absensinya tetap disimpan.`
+                        )) {
+                            button.disabled = false;
+                            return;
+                        }
+                        const result = await apiRequest("delete_user", { nim: nim });
+                        if (!result || !result.status) {
+                            throw new Error(result && result.message || "Penghapusan akun gagal.");
+                        }
+                        resultContainer.textContent = result.message;
+                        resultContainer.classList.add("success");
+                        await this.loadAdminUsers();
+                        await this.loadAdminHistory(admin);
+                        return;
+                    }
+
+                    if (!window.confirm(
+                        `Buat sandi sementara baru untuk NIM ${nim}? Sandi lama tidak akan berlaku.`
+                    )) {
+                        button.disabled = false;
+                        return;
+                    }
+
+                    resultContainer.textContent = "Membuat sandi sementara...";
                     const result =
                         await apiRequest("reset_password", { nim: nim });
 
@@ -1531,7 +1628,7 @@ if (btnBukaKamera) {
                     await this.loadAdminUsers();
                 } catch (error) {
                     resultContainer.textContent =
-                        error.message || "Reset sandi gagal.";
+                        this.getAdminApiErrorMessage(error, "Aksi akun gagal.");
                     resultContainer.classList.add("error");
                     button.disabled = false;
                 }
@@ -1632,17 +1729,29 @@ if (btnBukaKamera) {
             const rows = users.map((user) => `
                 <tr>
                     <td>${this.escape(user.nim)}</td>
-                    <td>${this.escape(user.nama)}</td>
-                    <td>${this.escape(user.email || "-")}</td>
-                    <td>${this.escape(user.divisi || "-")}</td>
+                    <td><input data-user-field="nama" aria-label="Nama ${this.escape(user.nim)}" value="${this.escape(user.nama)}" required></td>
+                    <td><input data-user-field="email" type="email" aria-label="Email ${this.escape(user.nim)}" value="${this.escape(user.email || "")}"></td>
+                    <td><input data-user-field="divisi" aria-label="Divisi ${this.escape(user.nim)}" value="${this.escape(user.divisi || "")}"></td>
                     <td>${this.escape(user.password || "****")}</td>
                     <td>${this.escape(user.tanggalDaftar || "Belum tercatat")}</td>
                     <td>
+                        <div class="admin-user-actions">
+                            <button
+                                class="btn-primary"
+                                type="button"
+                                data-save-user="${this.escape(user.nim)}"
+                            >Simpan</button>
                         <button
                             class="btn-secondary admin-reset-password"
                             type="button"
                             data-reset-user="${this.escape(user.nim)}"
                         >Reset sandi</button>
+                            <button
+                                class="btn-danger"
+                                type="button"
+                                data-delete-user="${this.escape(user.nim)}"
+                            >Hapus</button>
+                        </div>
                     </td>
                 </tr>
             `).join("");
@@ -1668,10 +1777,20 @@ if (btnBukaKamera) {
         } catch (error) {
             container.innerHTML = `
                 <p class="error">${this.escape(
-                    error.message || "Daftar akun gagal dimuat."
+                    this.getAdminApiErrorMessage(error, "Daftar akun gagal dimuat.")
                 )}</p>
             `;
         }
+    },
+
+    getAdminApiErrorMessage: function (error, fallback) {
+        const message = error && error.message
+            ? error.message
+            : fallback;
+        if (message === "Aksi tidak dikenali.") {
+            return "Apps Script yang aktif masih versi lama. Salin Code.gs terbaru lalu terapkan deployment sebagai versi baru.";
+        }
+        return message || fallback;
     },
 
 
@@ -1868,27 +1987,35 @@ if (btnBukaKamera) {
 
 
             if (!result.status) {
-
-                container.innerHTML = `
-
-                    <p class="error">
-
-                        ${this.escape(
-                            result.message ||
-                            "Gagal mengambil data."
-                        )}
-
-                    </p>
-
-                `;
-
-                return;
-
+                throw new Error(
+                    result.message || "Gagal mengambil data."
+                );
             }
 
 
-            const data =
-                result.riwayat || [];
+            const data = result.riwayat || [];
+            const selectedSlot = this.adminQrSlots[this.adminQrSlotIndex];
+            const slots = new Set();
+            let hasLegacyRows = false;
+            data.forEach((item) => {
+                const checkInSlot = String(item.qrMasukSlot || "").trim();
+                const checkOutSlot = String(item.qrPulangSlot || "").trim();
+                if (checkInSlot) slots.add(checkInSlot);
+                if (checkOutSlot) slots.add(checkOutSlot);
+                if (!checkInSlot && !checkOutSlot) hasLegacyRows = true;
+            });
+
+            this.adminQrSlots = Array.from(slots).sort((left, right) =>
+                Number(left) - Number(right)
+            );
+            if (hasLegacyRows) {
+                this.adminQrSlots.unshift("legacy");
+            }
+            this.adminHistoryData = data;
+            const previousIndex = this.adminQrSlots.indexOf(selectedSlot);
+            this.adminQrSlotIndex = previousIndex >= 0
+                ? previousIndex
+                : this.adminQrSlots.length - 1;
 
 
             const total =
@@ -1905,153 +2032,98 @@ if (btnBukaKamera) {
             }
 
 
-            if (data.length === 0) {
-
-                container.innerHTML = `
-
-                    <div class="empty">
-
-                        Belum ada data
-                        absensi.
-
-                    </div>
-
-                `;
-
-                return;
-
-            }
-
-
-            let html = `
-
-                <div class="table-wrapper">
-
-                    <table>
-
-                        <thead>
-
-                            <tr>
-
-                                <th>
-                                    NIM
-                                </th>
-
-                                <th>
-                                    Nama
-                                </th>
-
-                                <th>
-                                    Tanggal
-                                </th>
-
-                                <th>
-                                    Masuk
-                                </th>
-
-                                <th>
-                                    Pulang
-                                </th>
-
-                                <th>
-                                    Status
-                                </th>
-
-                            </tr>
-
-                        </thead>
-
-
-                        <tbody>
-
-            `;
-
-
-            data.forEach(item => {
-
-                html += `
-
-                    <tr>
-
-                        <td>
-                            ${this.escape(
-                                item.nim
-                            )}
-                        </td>
-
-                        <td>
-                            ${this.escape(
-                                item.nama
-                            )}
-                        </td>
-
-                        <td>
-                            ${this.escape(
-                                item.tanggal
-                            )}
-                        </td>
-
-                        <td>
-                            ${this.escape(
-                                item.jamMasuk || "-"
-                            )}
-                        </td>
-
-                        <td>
-                            ${this.escape(
-                                item.jamPulang || "-"
-                            )}
-                        </td>
-
-                        <td>
-                            ${this.escape(
-                                item.status || "-"
-                            )}
-                        </td>
-
-                    </tr>
-
-                `;
-
-            });
-
-
-            html += `
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-            `;
-
-
-            container.innerHTML =
-                html;
-
-
+            this.renderAdminHistoryPeriod();
         } catch (error) {
-
-            console.error(
-                "ADMIN HISTORY ERROR:",
-                error
-            );
-
-
+            console.error("ADMIN HISTORY ERROR:", error);
             container.innerHTML = `
-
-                <p class="error">
-
-                    Gagal mengambil
-                    data absensi.
-
-                </p>
-
+                <p class="error">${this.escape(
+                    this.getAdminApiErrorMessage(error, "Gagal mengambil data absensi.")
+                )}</p>
             `;
+        }
+    },
 
+    getAdminQrPeriodLabel: function (slot) {
+        if (slot === "legacy") {
+            return "Data lama (QR belum tercatat)";
+        }
+        const start = Number(slot) * QR_SLOT_MS - QR_WIB_OFFSET;
+        const end = (Number(slot) + 1) * QR_SLOT_MS - QR_WIB_OFFSET;
+        return `${this.formatWibDateTime(start)} - ${this.formatWibDateTime(end)}`;
+    },
+
+    renderAdminHistoryPeriod: function () {
+        const container = document.getElementById("adminHistory");
+        const label = document.getElementById("adminQrPeriodLabel");
+        const previous = document.getElementById("btnAdminQrPrev");
+        const next = document.getElementById("btnAdminQrNext");
+        const print = document.getElementById("btnAdminPrintHistory");
+        if (!container) return;
+
+        if (this.adminQrSlotIndex < 0 || !this.adminQrSlots.length) {
+            if (label) label.textContent = "Belum ada data absensi";
+            if (previous) previous.disabled = true;
+            if (next) next.disabled = true;
+            if (print) print.disabled = true;
+            container.innerHTML = '<div class="empty">Belum ada data absensi.</div>';
+            return;
         }
 
+        const slot = this.adminQrSlots[this.adminQrSlotIndex];
+        const reportData = this.adminHistoryData.filter((item) => {
+            const checkInSlot = String(item.qrMasukSlot || "").trim();
+            const checkOutSlot = String(item.qrPulangSlot || "").trim();
+            return slot === "legacy"
+                ? !checkInSlot && !checkOutSlot
+                : checkInSlot === slot || checkOutSlot === slot;
+        });
+        const periodLabel = this.getAdminQrPeriodLabel(slot);
+
+        if (label) label.textContent = periodLabel;
+        if (previous) previous.disabled = this.adminQrSlotIndex <= 0;
+        if (next) next.disabled = this.adminQrSlotIndex >= this.adminQrSlots.length - 1;
+        if (print) print.disabled = reportData.length === 0;
+
+        if (!reportData.length) {
+            container.innerHTML = '<div class="empty">Tidak ada absensi pada periode QR ini.</div>';
+            return;
+        }
+
+        let html = `
+            <h4 class="print-report-title">Laporan Absensi - ${this.escape(periodLabel)}</h4>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>NIM</th>
+                            <th>Nama</th>
+                            <th>Tanggal</th>
+                            <th>Masuk</th>
+                            <th>Pulang</th>
+                            <th>QR Masuk</th>
+                            <th>QR Pulang</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        reportData.forEach((item) => {
+            html += `
+                <tr>
+                    <td>${this.escape(item.nim)}</td>
+                    <td>${this.escape(item.nama)}</td>
+                    <td>${this.escape(item.tanggal)}</td>
+                    <td>${this.escape(item.jamMasuk || "-")}</td>
+                    <td>${this.escape(item.jamPulang || "-")}</td>
+                    <td>${this.escape(item.qrMasukSlot ? this.getAdminQrPeriodLabel(String(item.qrMasukSlot)) : "-")}</td>
+                    <td>${this.escape(item.qrPulangSlot ? this.getAdminQrPeriodLabel(String(item.qrPulangSlot)) : "-")}</td>
+                    <td>${this.escape(item.status || "-")}</td>
+                </tr>
+            `;
+        });
+
+        container.innerHTML = `${html}</tbody></table></div>`;
     },
 
 
