@@ -415,6 +415,11 @@ function kaiRegister(body) {
     throw kaiApiError("NIM sudah terdaftar");
   }
 
+  const registeredAt = Utilities.formatDate(
+    new Date(),
+    "Asia/Jakarta",
+    "yyyy-MM-dd HH:mm:ss"
+  );
   kaiAppendRow(table, kaiRowFor(table.headers, {
     nim: nim,
     nama: nama,
@@ -422,11 +427,13 @@ function kaiRegister(body) {
     divisi: String(body.divisi || "").trim(),
     password: KAI_MASKED_PASSWORD,
     passwordHash: kaiPasswordHash(password, Utilities.getUuid()),
-    tanggalDaftar: Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss"),
+    tanggalDaftar: registeredAt,
     mustChangePassword: false,
     sessionVersion: 0,
     role: "user"
   }));
+  kaiReadTable("users");
+  SpreadsheetApp.flush();
   return { status: true, message: "Pendaftaran berhasil." };
 }
 
