@@ -1,5 +1,67 @@
 const Auth = {
 
+    ADMIN_NIM: "666999",
+    ADMIN_PASSWORD: "kaisejahtera*",
+
+    // ===== AKUN ADMIN BAWAAN (PENGINGAT DEVELOPER) =====
+    // NIM      : 666999
+    // Password : kaisejahtera*
+    // Catatan  : akun ini dibuat otomatis, tidak bisa dibuat lewat form registrasi.
+    // ====================================================
+    seedAdmin: function () {
+
+        const accounts =
+            JSON.parse(
+                localStorage.getItem("accounts") || "[]"
+            );
+
+
+        if (!Array.isArray(accounts)) {
+
+            throw new Error(
+                "Data akun di localStorage tidak valid."
+            );
+
+        }
+
+
+        const adminExists =
+            accounts.some(
+                function (account) {
+
+                    return account.nim === this.ADMIN_NIM;
+
+                }.bind(this)
+            );
+
+
+        if (adminExists) {
+
+            return;
+
+        }
+
+
+        accounts.push({
+
+            nim: this.ADMIN_NIM,
+            password: this.ADMIN_PASSWORD,
+            nama: "Administrator",
+            email: "",
+            divisi: "",
+            role: "admin"
+
+        });
+
+
+        localStorage.setItem(
+            "accounts",
+            JSON.stringify(accounts)
+        );
+
+    },
+
+
     // =========================================
     // LOGIN
     // =========================================
@@ -28,6 +90,72 @@ const Auth = {
             }
 
 
+            const accounts =
+                JSON.parse(
+                    localStorage.getItem("accounts") || "[]"
+                );
+
+
+            if (!Array.isArray(accounts)) {
+
+                throw new Error(
+                    "Data akun di localStorage tidak valid."
+                );
+
+            }
+
+
+            const localAccount =
+                accounts.find(
+                    function (account) {
+
+                        return account.nim === nim;
+
+                    }
+                );
+
+
+            if (localAccount) {
+
+                if (
+                    localAccount.role !== "admin" ||
+                    localAccount.password !== password
+                ) {
+
+                    return {
+                        status: false,
+                        message: "NIM atau password salah."
+                    };
+
+                }
+
+
+                const user = {
+
+                    nim: localAccount.nim,
+                    nama: localAccount.nama,
+                    email: localAccount.email || "",
+                    divisi: localAccount.divisi || "",
+                    role: "admin"
+
+                };
+
+
+                localStorage.setItem(
+                    "user",
+                    JSON.stringify(user)
+                );
+
+
+                return {
+                    status: true,
+                    message: "Login berhasil.",
+                    user: user
+                };
+
+            }
+
+
             // Kirim ke Google Apps Script
             const result =
                 await apiRequest(
@@ -37,12 +165,6 @@ const Auth = {
                         password: password
                     }
                 );
-
-
-            console.log(
-                "[AUTH] LOGIN RESPONSE:",
-                result
-            );
 
 
             // Login gagal
@@ -118,12 +240,6 @@ const Auth = {
             localStorage.setItem(
                 "user",
                 JSON.stringify(user)
-            );
-
-
-            console.log(
-                "[AUTH] USER DISIMPAN:",
-                user
             );
 
 
@@ -214,24 +330,17 @@ const Auth = {
                         data.divisi || ""
                     ).trim(),
 
-                role:
-                    String(
-                        data.role || "user"
-                    )
-                    .toLowerCase()
-                    .trim()
+                role: "user"
 
             };
 
 
-            // User biasa tidak boleh
-            // menentukan admin dari frontend
-            if (
-                payload.role !== "admin" &&
-                payload.role !== "user"
-            ) {
+            if (payload.nim === this.ADMIN_NIM) {
 
-                payload.role = "user";
+                return {
+                    status: false,
+                    message: "NIM sudah terdaftar"
+                };
 
             }
 

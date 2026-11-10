@@ -12,6 +12,9 @@ const App = {
 
         try {
 
+            Auth.seedAdmin();
+
+
             // Pasang semua event
             this.setupEvents();
 
@@ -26,12 +29,6 @@ const App = {
             // =====================================
 
             if (user) {
-
-                console.log(
-                    "[APP] User ditemukan:",
-                    user
-                );
-
 
                 this.showPage(
                     "dashboardPage"
@@ -366,19 +363,13 @@ const App = {
         if (message) {
 
             message.textContent =
-                "Menghubungkan ke server...";
+                "Memverifikasi akun...";
 
         }
 
 
-        console.log(
-            "[LOGIN] Mengirim login:",
-            nim
-        );
-
-
         // =====================================
-        // LOGIN KE BACKEND
+        // LOGIN
         // =====================================
 
         const result =
@@ -386,12 +377,6 @@ const App = {
                 nim,
                 password
             );
-
-
-        console.log(
-            "[LOGIN] Response:",
-            result
-        );
 
 
         if (message) {
@@ -472,12 +457,6 @@ const App = {
             );
 
 
-        const roleInput =
-            this.getElement(
-                "registerRole"
-            );
-
-
         const message =
             this.getElement(
                 "registerMessage"
@@ -526,12 +505,7 @@ const App = {
                     : "",
 
             password:
-                passwordInput.value.trim(),
-
-            role:
-                roleInput
-                    ? roleInput.value
-                    : "user"
+                passwordInput.value.trim()
 
         };
 
