@@ -4,11 +4,6 @@ const QR_SLOT_MS =
 const QR_WIB_OFFSET =
     7 * 60 * 60 * 1000;
 
-// SECRET QR: ganti sesuai kebutuhan, jangan dibagikan.
-const QR_SECRET =
-    "kai-absensi-qr-rotation-v1";
-
-
 const Dashboard = {
     scannedQR: "",
     activeQrMode: "",
@@ -26,51 +21,20 @@ const Dashboard = {
     },
 
 
-    getTimeQrData: async function (now = Date.now()) {
+    getTimeQrData: async function () {
 
-        if (
-            !window.crypto ||
-            !window.crypto.subtle
-        ) {
+        const result =
+            await apiRequest("qr_current");
 
+        if (!result || !result.status || !result.qr) {
             throw new Error(
-                "Peramban tidak mendukung verifikasi QR yang aman."
+                result && result.message
+                    ? result.message
+                    : "QR tidak dapat dibuat."
             );
-
         }
 
-
-        const slot =
-            this.getSlot(now);
-
-        const encodedSecret =
-            new TextEncoder().encode(
-                `${QR_SECRET}:${slot}`
-            );
-
-        const digest =
-            await window.crypto.subtle.digest(
-                "SHA-256",
-                encodedSecret
-            );
-
-        const token =
-            Array.from(
-                new Uint8Array(digest),
-                byte => byte.toString(16).padStart(2, "0")
-            )
-                .join("")
-                .slice(0, 16);
-
-
-        return {
-            slot: slot,
-            token: token,
-            payload: `KAI-ABSEN|${slot}|${token}`,
-            expiresAt:
-                (slot + 1) * QR_SLOT_MS -
-                QR_WIB_OFFSET
-        };
+        return result.qr;
 
     },
 
@@ -91,13 +55,8 @@ const Dashboard = {
         }
 
 
-        const current =
-            await this.getTimeQrData();
-
-
         return (
-            match[1] === String(current.slot) &&
-            match[2] === current.token
+            match[1] === String(this.getSlot())
         );
 
     },
@@ -801,9 +760,8 @@ if (btnBukaKamera) {
                     nim:
                         user.nim,
 
-                    // Pertahankan format QR API lama setelah token lolos validasi lokal.
                     qr:
-                        `${CONFIG.QR_CODE}|MASUK`
+                        this.scannedQR
 
                 }
 
@@ -930,9 +888,8 @@ if (btnBukaKamera) {
                     nim:
                         user.nim,
 
-                    // Pertahankan format QR API lama setelah token lolos validasi lokal.
                     qr:
-                        `${CONFIG.QR_CODE}|PULANG`
+                        this.scannedQR
 
                 }
 
@@ -1030,12 +987,6 @@ if (btnBukaKamera) {
                         nim: user.nim
                     }
                 );
-
-
-            console.log(
-                "RIWAYAT USER:",
-                result
-            );
 
 
             if (!result.status) {
@@ -1649,12 +1600,6 @@ if (btnBukaKamera) {
                         nim: admin.nim
                     }
                 );
-
-
-            console.log(
-                "RIWAYAT ADMIN:",
-                result
-            );
 
 
             if (!result.status) {

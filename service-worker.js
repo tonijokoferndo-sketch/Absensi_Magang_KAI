@@ -5,7 +5,7 @@
 // perubahan file (css/js/html) supaya cache lama
 // dibersihkan dan pengguna dapat versi terbaru.
 
-const CACHE_VERSION = "kai-absensi-v3";
+const CACHE_VERSION = "kai-absensi-v4";
 
 // Semua path relatif terhadap lokasi service-worker.js
 // (penting untuk GitHub Pages yang biasanya berada di
@@ -69,7 +69,7 @@ self.addEventListener("activate", (event) => {
 // =========================================
 // FETCH STRATEGY: NETWORK-FIRST
 // =========================================
-// - Request ke Google Apps Script (API) SELALU
+// - Request API absensi (POST) SELALU
 //   lewat network langsung, tidak boleh di-cache,
 //   karena datanya dinamis (login, absen, riwayat).
 // - Request lain (file statis app shell) coba ambil
@@ -82,13 +82,13 @@ self.addEventListener("fetch", (event) => {
 
     const url = event.request.url;
 
-    // Lewati request non-GET (POST ke Apps Script dsb.)
+    // Lewati request non-GET (POST ke API absensi).
     if (event.request.method !== "GET") {
         return;
     }
 
-    // Jangan cache request ke Google Apps Script (API absensi)
-    if (url.includes("script.google.com")) {
+    // Jangan cache request ke endpoint API absensi.
+    if (url.includes("/.netlify/functions/")) {
         return;
     }
 

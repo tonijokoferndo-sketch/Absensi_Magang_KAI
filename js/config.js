@@ -12,11 +12,11 @@ const CONFIG = {
 
 
     // =========================================
-    // google script api url
+    // URL Web App Apps Script (diisi setelah deployment).
     // =========================================
 
     API_URL:
-"https://script.google.com/macros/s/AKfycby_KKfyfXYPfGm7DGSEHdPh-bw4siIw9K0ug3Jmu1qhCk-v52U9jtKq6iwkqIVScV3S/exec",
+        "https://script.google.com/macros/s/AKfycbz6e_ojrwiqwlt8GoW3j1oOHFZUq5C115Gs1IpCIQRRCym1ojikaqCNCfwyh1peF0JXVw/exec",
 
 
     // =========================================

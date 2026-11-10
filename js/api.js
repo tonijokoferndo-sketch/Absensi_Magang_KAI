@@ -10,32 +10,29 @@ async function apiRequest(action, data = {}) {
     };
 
 
-    const safePayload = {
-        ...payload
-    };
-
-    if ("qr" in safePayload) {
-
-        safePayload.qr =
-            "[REDACTED]";
-
-    }
-
-    if ("password" in safePayload) {
-
-        safePayload.password =
-            "[REDACTED]";
-
-    }
-
-
     console.log(
         "[API] REQUEST:",
-        safePayload
+        action
     );
 
-
     try {
+
+        if (
+            action !== "login" &&
+            action !== "register"
+        ) {
+
+            const storedUser =
+                JSON.parse(
+                    localStorage.getItem("user") || "null"
+                );
+
+            if (storedUser && storedUser.sessionToken) {
+                payload.sessionToken =
+                    storedUser.sessionToken;
+            }
+
+        }
 
         const response =
             await fetch(
@@ -48,10 +45,8 @@ async function apiRequest(action, data = {}) {
                         "POST",
 
                     headers: {
-
                         "Content-Type":
                             "text/plain;charset=utf-8"
-
                     },
 
                     body:
@@ -72,22 +67,6 @@ async function apiRequest(action, data = {}) {
             "[API] STATUS:",
             response.status
         );
-
-
-        if (!response.ok) {
-
-            return {
-
-                status:
-                    false,
-
-                message:
-                    "HTTP Error " +
-                    response.status
-
-            };
-
-        }
 
 
         // =====================================
@@ -119,6 +98,16 @@ async function apiRequest(action, data = {}) {
                 message:
                     "Server tidak mengirim response JSON."
 
+            };
+
+        }
+
+
+        if (!response.ok) {
+
+            return result || {
+                status: false,
+                message: "HTTP Error " + response.status
             };
 
         }

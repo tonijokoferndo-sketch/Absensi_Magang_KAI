@@ -12,9 +12,6 @@ const App = {
 
         try {
 
-            Auth.seedAdmin();
-
-
             // Pasang semua event
             this.setupEvents();
 
