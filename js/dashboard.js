@@ -1451,6 +1451,9 @@ if (btnBukaKamera) {
                     <button id="btnAdminPrintHistory" class="btn-primary" type="button" disabled>
                         Cetak Periode Ini
                     </button>
+                    <button id="btnAdminDownloadHistory" class="btn-secondary" type="button" disabled>
+                        Unduh CSV
+                    </button>
                 </div>
 
                 <!-- DATA -->
@@ -1494,6 +1497,8 @@ if (btnBukaKamera) {
             document.getElementById("btnAdminQrNext");
         const printHistory =
             document.getElementById("btnAdminPrintHistory");
+        const downloadHistory =
+            document.getElementById("btnAdminDownloadHistory");
 
         if (previousQrPeriod) {
             previousQrPeriod.addEventListener("click", () => {
@@ -1515,6 +1520,12 @@ if (btnBukaKamera) {
 
         if (printHistory) {
             printHistory.addEventListener("click", () => window.print());
+        }
+
+        if (downloadHistory) {
+            downloadHistory.addEventListener("click", () => {
+                this.downloadAdminHistoryPeriod();
+            });
         }
 
         const usersRefresh =
@@ -2058,6 +2069,7 @@ if (btnBukaKamera) {
         const previous = document.getElementById("btnAdminQrPrev");
         const next = document.getElementById("btnAdminQrNext");
         const print = document.getElementById("btnAdminPrintHistory");
+        const download = document.getElementById("btnAdminDownloadHistory");
         if (!container) return;
 
         if (this.adminQrSlotIndex < 0 || !this.adminQrSlots.length) {
@@ -2065,6 +2077,7 @@ if (btnBukaKamera) {
             if (previous) previous.disabled = true;
             if (next) next.disabled = true;
             if (print) print.disabled = true;
+            if (download) download.disabled = true;
             container.innerHTML = '<div class="empty">Belum ada data absensi.</div>';
             return;
         }
@@ -2083,6 +2096,7 @@ if (btnBukaKamera) {
         if (previous) previous.disabled = this.adminQrSlotIndex <= 0;
         if (next) next.disabled = this.adminQrSlotIndex >= this.adminQrSlots.length - 1;
         if (print) print.disabled = reportData.length === 0;
+        if (download) download.disabled = reportData.length === 0;
 
         if (!reportData.length) {
             container.innerHTML = '<div class="empty">Tidak ada absensi pada periode QR ini.</div>';
@@ -2124,6 +2138,63 @@ if (btnBukaKamera) {
         });
 
         container.innerHTML = `${html}</tbody></table></div>`;
+    },
+
+    downloadAdminHistoryPeriod: function () {
+        if (this.adminQrSlotIndex < 0 || !this.adminQrSlots.length) {
+            return;
+        }
+
+        const slot = this.adminQrSlots[this.adminQrSlotIndex];
+        const reportData = this.adminHistoryData.filter((item) => {
+            const checkInSlot = String(item.qrMasukSlot || "").trim();
+            const checkOutSlot = String(item.qrPulangSlot || "").trim();
+            return slot === "legacy"
+                ? !checkInSlot && !checkOutSlot
+                : checkInSlot === slot || checkOutSlot === slot;
+        });
+        if (!reportData.length) return;
+
+        const columns = [
+            ["NIM", "nim"],
+            ["Nama", "nama"],
+            ["Tanggal", "tanggal"],
+            ["Jam Masuk", "jamMasuk"],
+            ["Jam Pulang", "jamPulang"],
+            ["QR Masuk", "qrMasukSlot"],
+            ["QR Pulang", "qrPulangSlot"],
+            ["Status", "status"]
+        ];
+        const csvValue = (value) =>
+            `"${String(value == null ? "" : value).replace(/"/g, '""')}"`;
+        const rows = [
+            ["Periode QR", this.getAdminQrPeriodLabel(slot)],
+            [],
+            columns.map((column) => column[0]),
+            ...reportData.map((item) => columns.map(([, key]) => {
+                if (key === "qrMasukSlot" || key === "qrPulangSlot") {
+                    return item[key]
+                        ? this.getAdminQrPeriodLabel(String(item[key]))
+                        : "-";
+                }
+                return item[key] || "-";
+            }))
+        ];
+        const csv = "\uFEFF" + rows
+            .map((row) => row.map(csvValue).join(","))
+            .join("\r\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const filePeriod = slot === "legacy"
+            ? "data-lama"
+            : String(slot);
+        link.href = url;
+        link.download = `laporan-absensi-qr-${filePeriod}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
     },
 
 
